@@ -1,0 +1,13 @@
+{
+  "name": "example-split-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/start.ts",
+    "web": "bun run src/web.ts",
+    "worker": "bun run src/worker.ts"
+  },
+  "dependencies": {
+    "@xtandard/webhooks": "file:../.."
+  }
+}

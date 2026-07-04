@@ -34,3 +34,9 @@ data
 
 # generated API reference (run: bun run docs:api)
 docs/api
+
+# example install/runtime artifacts
+examples/**/node_modules
+examples/**/.webhooks
+examples/receivers/python/.venv
+examples/receivers/python/__pycache__

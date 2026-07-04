@@ -1,0 +1,11 @@
+{
+  "name": "example-receivers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "send": "bun run send.ts"
+  },
+  "dependencies": {
+    "@xtandard/webhooks": "file:../.."
+  }
+}

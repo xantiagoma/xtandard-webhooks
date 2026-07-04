@@ -1,0 +1,34 @@
+{
+  // In-repo editor/typecheck support for the examples: maps the
+  // `@xtandard/webhooks/*` import strings to the local source so they resolve
+  // without `bun install` or a build. The examples still depend on the package
+  // via `file:../..` at runtime (`bun install` in an example links it); when
+  // copied out, install the published package and drop these paths.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "types": ["bun"],
+    "paths": {
+      "@xtandard/webhooks": ["../src/index.ts"],
+      "@xtandard/webhooks/core": ["../src/core.ts"],
+      "@xtandard/webhooks/schema": ["../src/schema.ts"],
+      "@xtandard/webhooks/signing": ["../src/signing.ts"],
+      "@xtandard/webhooks/receiver": ["../src/receiver.ts"],
+      "@xtandard/webhooks/testing": ["../src/testing.ts"],
+      "@xtandard/webhooks/react": ["../src/react.tsx"],
+      "@xtandard/webhooks/elysia": ["../src/adapters/elysia.ts"],
+      "@xtandard/webhooks/hono": ["../src/adapters/hono.ts"],
+      "@xtandard/webhooks/bun": ["../src/adapters/bun.ts"],
+      "@xtandard/webhooks/express": ["../src/adapters/express.ts"],
+      "@xtandard/webhooks/storage/*": ["../src/storage/*"],
+      "@xtandard/webhooks/auth/*": ["../src/auth/*"],
+      "@xtandard/webhooks/authorization/*": ["../src/authorization/*"],
+      "@xtandard/webhooks/hooks/*": ["../src/hooks/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  // receivers/ are standalone polyglot projects (python/go/plain-ts) with their
+  // own toolchains + deps — not part of the monorepo typecheck.
+  "exclude": ["receivers/**"]
+}

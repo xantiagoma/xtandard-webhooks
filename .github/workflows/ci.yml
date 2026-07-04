@@ -59,6 +59,9 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Typecheck examples
+        run: bun run typecheck:examples
+
       - name: Lint
         run: bun run lint
 
@@ -79,3 +82,19 @@ jobs:
 
       - name: Pack check
         run: bun pm pack --dry-run
+
+  browser-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+      - name: Browser e2e (bundled UI)
+        run: bun run test:e2e
+        env:
+          CI: "true"

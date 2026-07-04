@@ -1,0 +1,12 @@
+{
+  "name": "example-elysia",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@xtandard/webhooks": "file:../..",
+    "elysia": "^1.2.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "receivers-typescript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run main.ts"
+  },
+  "dependencies": {
+    "@xtandard/webhooks": "file:../../.."
+  }
+}

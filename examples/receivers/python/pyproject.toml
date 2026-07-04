@@ -1,0 +1,6 @@
+[project]
+name = "receivers-python"
+version = "0.0.0"
+description = "FastAPI webhook receiver verifying with the official standardwebhooks library"
+requires-python = ">=3.10"
+dependencies = ["fastapi>=0.115", "uvicorn>=0.30", "standardwebhooks>=1.0"]

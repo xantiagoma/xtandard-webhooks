@@ -1,0 +1,11 @@
+{
+  "name": "example-full-loop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/start.ts"
+  },
+  "dependencies": {
+    "@xtandard/webhooks": "file:../.."
+  }
+}

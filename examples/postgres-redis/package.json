@@ -1,0 +1,13 @@
+{
+  "name": "example-postgres-redis",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@xtandard/webhooks": "file:../..",
+    "pg": "^8.13.0",
+    "redis": "^5.0.0"
+  }
+}

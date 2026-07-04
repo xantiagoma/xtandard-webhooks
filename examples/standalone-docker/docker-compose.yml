@@ -1,0 +1,35 @@
+# Standalone @xtandard/webhooks panel + dispatcher backed by Redis.
+#
+#   docker compose up
+#   open http://localhost:3000        # admin / changeme
+#
+# Uses the published image; to build from a checkout instead, replace `image:`
+# with:
+#   build:
+#     context: ../..
+#     dockerfile: apps/standalone/Dockerfile
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  webhooks:
+    image: ghcr.io/xantiagoma/xtandard-webhooks:latest
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      TITLE: "Acme Webhooks"
+      # One Redis for both planes; set QUEUE_STORAGE_DRIVER for a split.
+      STORAGE_DRIVER: redis
+      REDIS_URL: redis://redis:6379
+      AUTH_MODE: basic
+      AUTH_USERNAME: admin
+      # Replace with a real scrypt hash via AUTH_PASSWORD_HASH (see docs/AUTH.md);
+      # plaintext AUTH_PASSWORD is for dev only.
+      AUTH_PASSWORD: changeme
+      # Uncomment to compress retries while you evaluate:
+      # RETRY_SCHEDULE: "0s,5s,30s"
+    depends_on:
+      - redis

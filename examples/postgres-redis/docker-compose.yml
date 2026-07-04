@@ -1,0 +1,28 @@
+# Backing stores for the postgres-redis example.
+#
+#   docker compose up -d        # start postgres + redis in the background
+#   bun install && bun run start
+#   docker compose down -v      # stop and wipe data
+#
+# Defaults match the example's env defaults:
+#   DATABASE_URL=postgres://webhooks:webhooks@localhost:5432/webhooks
+#   REDIS_URL=redis://localhost:6379
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: webhooks
+      POSTGRES_PASSWORD: webhooks
+      POSTGRES_DB: webhooks
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webhooks -d webhooks"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"

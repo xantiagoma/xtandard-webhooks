@@ -1,0 +1,11 @@
+{
+  "name": "example-storage-drivers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@xtandard/webhooks": "file:../.."
+  }
+}

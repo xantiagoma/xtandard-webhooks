@@ -344,13 +344,21 @@
         "default": "./dist/entry-express.cjs"
       }
     },
+    "./react": {
+      "import": {
+        "types": "./dist/types-react/react.d.ts",
+        "default": "./dist/react.js"
+      }
+    },
+    "./react/styles.css": "./dist/react.css",
+    "./ui/*": "./dist/ui/*",
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "bun run build:lib && bun run build:ui",
+    "build": "bun run build:lib && bun run build:ui && bun run build:react",
     "build:lib": "vp pack",
     "test": "vp test run",
     "test:coverage": "vp test run --coverage",
@@ -364,7 +372,19 @@
     "build:ui": "vite build --config vite.ui.config.ts",
     "dev:ui": "vite --config vite.ui.config.ts",
     "test:e2e": "playwright test",
-    "standalone": "bun run apps/standalone/src/index.ts"
+    "standalone": "bun run apps/standalone/src/index.ts",
+    "build:react": "vite build --config vite.react.config.ts && tsc -p tsconfig.react.json",
+    "demo": "bun scripts/demo.ts",
+    "seed:demo": "bun scripts/seed-demo.ts",
+    "typecheck:examples": "tsc -p examples/tsconfig.json",
+    "examples:elysia": "bun scripts/example.ts elysia",
+    "examples:hono": "bun scripts/example.ts hono",
+    "examples:express": "bun scripts/example.ts express",
+    "examples:full-loop": "bun scripts/example.ts full-loop",
+    "examples:auth": "bun scripts/example.ts auth",
+    "examples:storage-drivers": "bun scripts/example.ts storage-drivers",
+    "examples:split-worker": "bun scripts/example.ts split-worker",
+    "examples:portal-embed": "bun scripts/example.ts portal-embed"
   },
   "dependencies": {
     "valibot": "^1.0.0",

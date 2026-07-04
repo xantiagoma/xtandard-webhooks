@@ -1,0 +1,5 @@
+# Optional: `mise install` pins the toolchains used by these polyglot receiver
+# examples. You can also just use your own system python/go/bun.
+[tools]
+python = "3.13"
+go = "1.23"
