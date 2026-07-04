@@ -79,6 +79,13 @@ const EXAMPLES: Record<string, ExampleConfig> = {
     panelPath: "/webhooks",
     note: "boots BOTH processes: the web app (publishes only) and the delivery worker",
   },
+  "portal-embed": {
+    dir: "examples/portal-embed",
+    kind: "server",
+    run: ["bun", "run", "start"],
+    preferredPort: 5190,
+    note: "embedded <WebhooksPortal/> in a host app (vite) — boots a seeded panel on :3701 + mints a portal token",
+  },
 };
 
 const name = process.argv[2];
