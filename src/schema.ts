@@ -173,6 +173,8 @@ export function isTerminalDeliveryStatus(status: DeliveryStatus): boolean {
 export interface Delivery {
   /** `"dlv_"` + 22-char base62, server-generated. */
   id: string;
+  /** The application this delivery belongs to (deliveries cross the dispatcher denormalized). */
+  applicationKey: string;
   messageId: string;
   endpointId: string;
   status: DeliveryStatus;

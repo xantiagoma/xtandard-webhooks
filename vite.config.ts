@@ -39,7 +39,14 @@ export default defineConfig({
     "*.{ts,tsx,md,mdx,json,jsonc,yml,yaml,css,html}": ["vp fmt"],
   },
   pack: {
-    entry: ["src/index.ts", "src/schema.ts", "src/signing.ts", "src/receiver.ts"],
+    entry: [
+      "src/index.ts",
+      "src/schema.ts",
+      "src/signing.ts",
+      "src/receiver.ts",
+      "src/entry-storage-memory.ts",
+      "src/entry-storage-file.ts",
+    ],
     dts: true,
     format: ["esm", "cjs"],
     sourcemap: true,

@@ -22,6 +22,25 @@ export * as keys from "./keys.ts";
 export { newId, idPattern, type IdPrefix } from "./id.ts";
 export { durationToMs, parseDurationList } from "./duration.ts";
 export {
+  hasDeliveryQueue,
+  isCompareAndSwap,
+  isTransactional,
+  isWatchable,
+  requirePeer,
+  type CompareAndSwapWebhooksStorage,
+  type DeliveryQueueStorage,
+  type StorageChangeEvent,
+  type TransactionalWebhooksStorage,
+  type WatchableWebhooksStorage,
+  type WebhooksStorage,
+} from "./storage/contract.ts";
+export {
+  pgListenNotify,
+  withWatch,
+  type PgNotificationClient,
+  type WatchSubscribe,
+} from "./storage/watch.ts";
+export {
   KEY_REGEX,
   RESERVED_HEADERS,
   ValidationError,
