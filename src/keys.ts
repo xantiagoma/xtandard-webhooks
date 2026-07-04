@@ -35,7 +35,10 @@ export const ROOT = "whk";
  * Application keys that would collide with global index keys under the shared
  * root. Rejected by validation.
  */
-export const RESERVED_APPLICATION_KEYS = ["applications", "event-types"] as const;
+export const RESERVED_APPLICATION_KEYS = ["applications", "event-types", "audit-log"] as const;
+
+/** Global audit log (event-type actions, which are not application-scoped). */
+export const globalAuditLogKey = () => `${ROOT}/audit-log`;
 
 /** Index key listing all known application keys. */
 export const applicationsKey = () => `${ROOT}/applications`;

@@ -184,6 +184,12 @@ export interface Delivery {
   nextAttemptAt?: string | null;
   /** Dispatcher claim expiry; an expired lease makes the delivery reclaimable. */
   leaseUntil?: string | null;
+  /**
+   * How the *next* attempt should be recorded: set to `"manual"` by
+   * retry/recover so the resulting attempt is attributed correctly, then
+   * cleared. Absent = `"schedule"`.
+   */
+  pendingTrigger?: AttemptTrigger;
   /** ISO-8601 creation timestamp. */
   createdAt: string;
   /** ISO-8601 last-transition timestamp. */

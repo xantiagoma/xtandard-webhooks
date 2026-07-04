@@ -41,11 +41,14 @@ export default defineConfig({
   pack: {
     entry: [
       "src/index.ts",
+      "src/core.ts",
       "src/schema.ts",
       "src/signing.ts",
       "src/receiver.ts",
+      "src/testing.ts",
       "src/entry-storage-memory.ts",
       "src/entry-storage-file.ts",
+      "src/entry-hooks-log.ts",
     ],
     dts: true,
     format: ["esm", "cjs"],
