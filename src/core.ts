@@ -54,7 +54,6 @@ import {
 import type {
   Actor,
   Application,
-  AuditAction,
   AuditEntry,
   Delivery,
   DeliveryAttempt,

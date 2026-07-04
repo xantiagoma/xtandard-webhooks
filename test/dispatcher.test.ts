@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AfterEvent } from "../src/hooks/contract.ts";
 import type { DeliveryEvent } from "../src/delivery-sink.ts";
-import type { Delivery, DeliveryAttempt } from "../src/schema.ts";
+import type { Delivery } from "../src/schema.ts";
 import { verify } from "../src/signing.ts";
 import { createMemoryStorage } from "../src/storage/memory.ts";
-import { createDispatcher } from "../src/dispatcher.ts";
 import { createWebhooksCore } from "../src/core.ts";
 import {
   createClock,
