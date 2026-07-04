@@ -9,6 +9,15 @@
  */
 
 export * from "./schema.ts";
+export {
+  SECRET_PREFIX,
+  WebhookVerificationError,
+  generateSecret,
+  sign,
+  signatureHeader,
+  verify,
+  type VerifyInput,
+} from "./signing.ts";
 export * as keys from "./keys.ts";
 export { newId, idPattern, type IdPrefix } from "./id.ts";
 export { durationToMs, parseDurationList } from "./duration.ts";
