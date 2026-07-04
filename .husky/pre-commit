@@ -1,0 +1,2 @@
+# Lint + format only the staged files (fast). See `staged` in vite.config.ts.
+bunx vp staged

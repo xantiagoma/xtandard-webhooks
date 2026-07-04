@@ -1,0 +1,36 @@
+# deps
+node_modules
+
+# build output
+dist
+coverage
+
+# test artifacts
+test-results
+playwright-report
+.playwright
+
+# logs / env
+*.log
+.env
+.env.*
+!.env.example
+
+# os / editor
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# scratch docs (provided briefs)
+tmp
+
+# example install artifacts
+examples/*/bun.lock
+
+# CLI/standalone file-storage dirs
+.webhooks
+data
+
+# generated API reference (run: bun run docs:api)
+docs/api

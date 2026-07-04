@@ -1,0 +1,5 @@
+# Catch the common CI failures locally before pushing: types, lint, format
+# (all files, incl. .md/.json/.yml), and the unit + bun test suites.
+# NOT run here (CI-only): coverage thresholds (needs live Redis/Mongo/Postgres),
+# e2e (slow), build/publint.
+bun run check && bun run test && bun run test:bun
