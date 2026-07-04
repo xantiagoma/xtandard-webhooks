@@ -124,6 +124,116 @@
         "default": "./dist/entry-storage-file.cjs"
       }
     },
+    "./storage/redis": {
+      "import": {
+        "types": "./dist/entry-storage-redis.d.mts",
+        "default": "./dist/entry-storage-redis.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-redis.d.cts",
+        "default": "./dist/entry-storage-redis.cjs"
+      }
+    },
+    "./storage/postgres": {
+      "import": {
+        "types": "./dist/entry-storage-postgres.d.mts",
+        "default": "./dist/entry-storage-postgres.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-postgres.d.cts",
+        "default": "./dist/entry-storage-postgres.cjs"
+      }
+    },
+    "./storage/drizzle": {
+      "import": {
+        "types": "./dist/entry-storage-drizzle.d.mts",
+        "default": "./dist/entry-storage-drizzle.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-drizzle.d.cts",
+        "default": "./dist/entry-storage-drizzle.cjs"
+      }
+    },
+    "./storage/mongodb": {
+      "import": {
+        "types": "./dist/entry-storage-mongodb.d.mts",
+        "default": "./dist/entry-storage-mongodb.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-mongodb.d.cts",
+        "default": "./dist/entry-storage-mongodb.cjs"
+      }
+    },
+    "./storage/sqlite": {
+      "import": {
+        "types": "./dist/entry-storage-sqlite.d.mts",
+        "default": "./dist/entry-storage-sqlite.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-sqlite.d.cts",
+        "default": "./dist/entry-storage-sqlite.cjs"
+      }
+    },
+    "./storage/libsql": {
+      "import": {
+        "types": "./dist/entry-storage-libsql.d.mts",
+        "default": "./dist/entry-storage-libsql.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-libsql.d.cts",
+        "default": "./dist/entry-storage-libsql.cjs"
+      }
+    },
+    "./storage/unstorage": {
+      "import": {
+        "types": "./dist/entry-storage-unstorage.d.mts",
+        "default": "./dist/entry-storage-unstorage.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-unstorage.d.cts",
+        "default": "./dist/entry-storage-unstorage.cjs"
+      }
+    },
+    "./storage/cloudflare-kv": {
+      "import": {
+        "types": "./dist/entry-storage-cloudflare-kv.d.mts",
+        "default": "./dist/entry-storage-cloudflare-kv.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-storage-cloudflare-kv.d.cts",
+        "default": "./dist/entry-storage-cloudflare-kv.cjs"
+      }
+    },
+    "./drizzle/pg": {
+      "import": {
+        "types": "./dist/entry-drizzle-pg.d.mts",
+        "default": "./dist/entry-drizzle-pg.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-drizzle-pg.d.cts",
+        "default": "./dist/entry-drizzle-pg.cjs"
+      }
+    },
+    "./drizzle/mysql": {
+      "import": {
+        "types": "./dist/entry-drizzle-mysql.d.mts",
+        "default": "./dist/entry-drizzle-mysql.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-drizzle-mysql.d.cts",
+        "default": "./dist/entry-drizzle-mysql.cjs"
+      }
+    },
+    "./drizzle/sqlite": {
+      "import": {
+        "types": "./dist/entry-drizzle-sqlite.d.mts",
+        "default": "./dist/entry-drizzle-sqlite.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-drizzle-sqlite.d.cts",
+        "default": "./dist/entry-drizzle-sqlite.cjs"
+      }
+    },
     "./hooks/log": {
       "import": {
         "types": "./dist/entry-hooks-log.d.mts",
@@ -132,6 +242,66 @@
       "require": {
         "types": "./dist/entry-hooks-log.d.cts",
         "default": "./dist/entry-hooks-log.cjs"
+      }
+    },
+    "./auth/none": {
+      "import": {
+        "types": "./dist/entry-auth-none.d.mts",
+        "default": "./dist/entry-auth-none.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-auth-none.d.cts",
+        "default": "./dist/entry-auth-none.cjs"
+      }
+    },
+    "./auth/basic": {
+      "import": {
+        "types": "./dist/entry-auth-basic.d.mts",
+        "default": "./dist/entry-auth-basic.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-auth-basic.d.cts",
+        "default": "./dist/entry-auth-basic.cjs"
+      }
+    },
+    "./auth/delegated": {
+      "import": {
+        "types": "./dist/entry-auth-delegated.d.mts",
+        "default": "./dist/entry-auth-delegated.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-auth-delegated.d.cts",
+        "default": "./dist/entry-auth-delegated.cjs"
+      }
+    },
+    "./authorization/none": {
+      "import": {
+        "types": "./dist/entry-authorization-none.d.mts",
+        "default": "./dist/entry-authorization-none.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-authorization-none.d.cts",
+        "default": "./dist/entry-authorization-none.cjs"
+      }
+    },
+    "./authorization/roles": {
+      "import": {
+        "types": "./dist/entry-authorization-roles.d.mts",
+        "default": "./dist/entry-authorization-roles.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-authorization-roles.d.cts",
+        "default": "./dist/entry-authorization-roles.cjs"
+      }
+    },
+    "./authorization/delegated": {
+      "import": {
+        "types": "./dist/entry-authorization-delegated.d.mts",
+        "default": "./dist/entry-authorization-delegated.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-authorization-delegated.d.cts",
+        "default": "./dist/entry-authorization-delegated.cjs"
       }
     },
     "./package.json": "./package.json"
