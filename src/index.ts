@@ -8,4 +8,20 @@
  * @module
  */
 
-export const VERSION = "0.0.0";
+export * from "./schema.ts";
+export * as keys from "./keys.ts";
+export { newId, idPattern, type IdPrefix } from "./id.ts";
+export { durationToMs, parseDurationList } from "./duration.ts";
+export {
+  KEY_REGEX,
+  RESERVED_HEADERS,
+  ValidationError,
+  assertValid,
+  validateApplication,
+  validateEndpoint,
+  validateEndpointUrl,
+  validateEventType,
+  type UrlPolicyOptions,
+  type ValidationIssue,
+  type ValidationResult,
+} from "./validation.ts";
