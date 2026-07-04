@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/*
+ * shadcn-style token system (inspired by the v0 reference): a largely neutral
+ * palette with a single blue accent used sparingly. Light is the default; dark is
+ * applied via `data-theme="dark"` on <html> (see theme.ts). `@theme inline` maps
+ * the semantic vars to Tailwind color utilities (bg-card, text-muted-foreground…).
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", "Cascadia Code", ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ── Light (default) ─────────────────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+  --radius: 0.625rem;
+
+  --background: oklch(0.99 0.002 285);
+  --foreground: oklch(0.21 0.01 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.01 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.01 285);
+
+  --primary: oklch(0.24 0.01 285); /* near-black neutral button */
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.965 0.003 285);
+  --secondary-foreground: oklch(0.24 0.01 285);
+  --muted: oklch(0.965 0.003 285);
+  --muted-foreground: oklch(0.5 0.012 285);
+
+  --accent: oklch(0.55 0.2 256); /* blue brand accent */
+  --accent-foreground: oklch(0.99 0 0);
+
+  --success: oklch(0.6 0.15 152);
+  --warning: oklch(0.7 0.15 78);
+  --info: oklch(0.55 0.2 256);
+  --destructive: oklch(0.58 0.21 24);
+
+  --border: oklch(0.21 0.01 285 / 11%);
+  --input: oklch(0.21 0.01 285 / 14%);
+  --ring: oklch(0.55 0.2 256);
+
+  --chart-1: oklch(0.55 0.2 256);
+  --chart-2: oklch(0.6 0.15 152);
+  --chart-3: oklch(0.7 0.15 78);
+  --chart-4: oklch(0.6 0.2 16);
+  --chart-5: oklch(0.62 0.16 300);
+
+  --shadow-sm: 0 1px 2px oklch(0.2 0.02 285 / 0.06);
+  --shadow-md: 0 2px 4px oklch(0.2 0.02 285 / 0.05), 0 8px 20px oklch(0.2 0.02 285 / 0.08);
+  --shadow-lg: 0 16px 40px oklch(0.2 0.02 285 / 0.16);
+}
+
+/* ── Dark ────────────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --background: oklch(0.16 0.004 285);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.205 0.004 285);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.22 0.004 285);
+  --popover-foreground: oklch(0.97 0 0);
+
+  --primary: oklch(0.97 0 0); /* near-white neutral button */
+  --primary-foreground: oklch(0.2 0.01 285);
+  --secondary: oklch(0.27 0.004 285);
+  --secondary-foreground: oklch(0.97 0 0);
+  --muted: oklch(0.27 0.004 285);
+  --muted-foreground: oklch(0.66 0.005 285);
+
+  --accent: oklch(0.62 0.19 256);
+  --accent-foreground: oklch(0.99 0 0);
+
+  --success: oklch(0.72 0.18 152);
+  --warning: oklch(0.78 0.15 78);
+  --info: oklch(0.62 0.19 256);
+  --destructive: oklch(0.62 0.21 24);
+
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.62 0.19 256);
+
+  --chart-1: oklch(0.62 0.19 256);
+  --chart-2: oklch(0.72 0.18 152);
+  --chart-3: oklch(0.78 0.15 78);
+  --chart-4: oklch(0.66 0.2 16);
+  --chart-5: oklch(0.7 0.16 300);
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 2px 4px oklch(0 0 0 / 0.3), 0 10px 28px oklch(0 0 0 / 0.45);
+  --shadow-lg: 0 18px 48px oklch(0 0 0 / 0.55);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

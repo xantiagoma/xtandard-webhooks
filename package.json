@@ -304,13 +304,53 @@
         "default": "./dist/entry-authorization-delegated.cjs"
       }
     },
+    "./elysia": {
+      "import": {
+        "types": "./dist/entry-elysia.d.mts",
+        "default": "./dist/entry-elysia.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-elysia.d.cts",
+        "default": "./dist/entry-elysia.cjs"
+      }
+    },
+    "./hono": {
+      "import": {
+        "types": "./dist/entry-hono.d.mts",
+        "default": "./dist/entry-hono.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-hono.d.cts",
+        "default": "./dist/entry-hono.cjs"
+      }
+    },
+    "./bun": {
+      "import": {
+        "types": "./dist/entry-bun.d.mts",
+        "default": "./dist/entry-bun.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-bun.d.cts",
+        "default": "./dist/entry-bun.cjs"
+      }
+    },
+    "./express": {
+      "import": {
+        "types": "./dist/entry-express.d.mts",
+        "default": "./dist/entry-express.mjs"
+      },
+      "require": {
+        "types": "./dist/entry-express.d.cts",
+        "default": "./dist/entry-express.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "bun run build:lib",
+    "build": "bun run build:lib && bun run build:ui",
     "build:lib": "vp pack",
     "test": "vp test run",
     "test:coverage": "vp test run --coverage",
@@ -320,7 +360,11 @@
     "format:check": "vp fmt --check",
     "typecheck": "tsc --noEmit",
     "check": "vp lint && vp fmt --check && tsc --noEmit",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "build:ui": "vite build --config vite.ui.config.ts",
+    "dev:ui": "vite --config vite.ui.config.ts",
+    "test:e2e": "playwright test",
+    "standalone": "bun run apps/standalone/src/index.ts"
   },
   "dependencies": {
     "valibot": "^1.0.0",
