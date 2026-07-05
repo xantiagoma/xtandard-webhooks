@@ -692,7 +692,9 @@ describe("routes — error mappings", () => {
     expect((await res.json()).error).toBe("Unauthorized");
   });
 
-  test("auth that throws is treated as unauthenticated", async () => {
+  test("auth that throws surfaces as 500, not a misleading 401", async () => {
+    // A throwing auth provider is a backend failure (IdP down, DB error), not
+    // "no credentials" — collapsing it into 401 would mask an outage.
     const { fetch } = panel({
       auth: {
         authenticate: async () => {
@@ -700,7 +702,7 @@ describe("routes — error mappings", () => {
         },
       },
     });
-    expect((await fetch(req("GET", "/api/applications"))).status).toBe(401);
+    expect((await fetch(req("GET", "/api/applications"))).status).toBe(500);
   });
 
   test("unknown /api route → 404", async () => {

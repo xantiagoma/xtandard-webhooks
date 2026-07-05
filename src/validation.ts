@@ -17,6 +17,26 @@ import type { Application, Endpoint } from "./schema.ts";
 export const KEY_REGEX = /^[a-zA-Z0-9._-]+$/;
 
 /**
+ * Validate a caller-supplied string that becomes a **storage key segment**
+ * (e.g. an idempotency key). Rejects anything that could escape its namespace
+ * or traverse the filesystem on the file adapter: characters outside
+ * {@link KEY_REGEX}, and the dot-only segments `.` / `..`. Returns the issue
+ * list (empty when safe) so callers can fold it into a {@link ValidationError}.
+ */
+export function validateKeySegment(value: string, path: string): ValidationIssue[] {
+  if (!KEY_REGEX.test(value)) {
+    return [{ path, message: `must match ${KEY_REGEX} (no slashes or path separators)` }];
+  }
+  if (/^\.+$/.test(value)) {
+    return [{ path, message: `"${value}" is not an allowed key` }];
+  }
+  if (value.length > 256) {
+    return [{ path, message: "must be at most 256 characters" }];
+  }
+  return [];
+}
+
+/**
  * Header names owned by the Standard Webhooks wire contract. Endpoints may not
  * override them via static headers.
  */

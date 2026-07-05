@@ -17,7 +17,7 @@ import { createWebhooksCore, type RetentionOptions, type WebhooksCore } from "..
 import type { DeliveryErrorReporter, DeliveryListener } from "../delivery-sink.ts";
 import { createDispatcher, type Dispatcher, type DispatcherOptions } from "../dispatcher.ts";
 import type { HookErrorReporter, WebhooksHooksInput } from "../hooks/contract.ts";
-import type { WebhooksStorage } from "../storage/contract.ts";
+import { hasDeliveryQueue, isCompareAndSwap, type WebhooksStorage } from "../storage/contract.ts";
 import { normalizeBasePath, stripBasePath } from "./base-path.ts";
 import { applyCorsHeaders, preflightResponse, type WebhooksCorsOptions } from "./cors.ts";
 import { buildOpenApiDocument } from "./openapi.ts";
@@ -175,6 +175,22 @@ export function createFetchHandler(options: WebhooksPanelOptions): CreateFetchHa
   // AND started (timers are unref()ed — it never keeps the process alive).
   let dispatcher: Dispatcher | null = null;
   if (options.dispatcher !== false) {
+    // Claiming is only exclusive across processes when the queue storage has
+    // native claimDue (redis/memory) or compare-and-swap. On plainer backends
+    // (postgres/file/mongodb/…) two dispatchers can claim the same delivery and
+    // double-send. Since the panel auto-starts one on EVERY mount, warn loudly
+    // so a horizontally-scaled deployment sets `dispatcher: false` on all but
+    // one instance (or runs a single split worker). See docs/DELIVERY.md.
+    const queue = options.queueStorage ?? options.storage;
+    if (queue && !hasDeliveryQueue(queue) && !isCompareAndSwap(queue)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[@xtandard/webhooks] The panel started an in-process dispatcher over storage " +
+          "without atomic claiming (no claimDue/compareAndSwap). If you run more than one " +
+          "instance, deliveries WILL be sent multiple times — set `dispatcher: false` on all " +
+          "but one instance, or use redis/memory storage. See docs/DELIVERY.md.",
+      );
+    }
     dispatcher = createDispatcher(core, dispatcherOptions ?? {});
     dispatcher.start();
   }

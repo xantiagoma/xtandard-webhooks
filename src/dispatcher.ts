@@ -101,7 +101,11 @@ export function createDispatcher(core: WebhooksCore, options: DispatcherOptions 
   const batchSize = merged.batchSize ?? 20;
   const concurrency = merged.concurrency ?? 8;
   const timeoutMs = merged.timeoutMs ?? 20_000;
-  const leaseMs = merged.leaseMs ?? 60_000;
+  // The lease must outlast a single attempt, or a slow-but-alive attempt runs
+  // past its lease and a second dispatcher reclaims and re-sends it. Enforce
+  // lease > timeout with headroom for recording the outcome.
+  const configuredLeaseMs = merged.leaseMs ?? 60_000;
+  const leaseMs = Math.max(configuredLeaseMs, timeoutMs + 10_000);
   const schedule = merged.retrySchedule ?? DEFAULT_RETRY_SCHEDULE;
   const autoDisable = merged.autoDisable ?? { failingForDays: 5 };
   const responseBodyLimit = merged.responseBodyLimit ?? 4096;

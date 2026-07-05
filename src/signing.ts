@@ -218,7 +218,11 @@ export async function verify(input: VerifyInput): Promise<WebhookEnvelope> {
   const secrets = Array.isArray(input.secret) ? input.secret : [input.secret];
   if (secrets.length === 0) throw new WebhookVerificationError("No secret provided");
 
-  const content = `${id}.${timestamp}.${input.payload}`;
+  // Sign over the timestamp EXACTLY as it arrived on the wire (already
+  // validated as digits above), not the JS-parsed number — re-stringifying
+  // through Number() can lose precision or reformat and would reject a
+  // legitimately-signed webhook whose value doesn't round-trip.
+  const content = `${id}.${timestampRaw.trim()}.${input.payload}`;
   let matched = false;
   for (const secret of secrets) {
     const expected = await hmacSha256(decodeSecret(secret), content);

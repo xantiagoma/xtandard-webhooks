@@ -200,8 +200,11 @@ export async function handleApiRequest(
   } else {
     try {
       principal = await ctx.auth.authenticate(request);
-    } catch {
-      principal = null;
+    } catch (err) {
+      // A throwing auth provider is a backend failure (IdP down, DB error) —
+      // surface it as 500, not a misleading 401. `null` means "no valid
+      // credentials"; an exception means "couldn't decide".
+      return mapError(err);
     }
   }
 
@@ -234,10 +237,15 @@ export async function handleApiRequest(
       // Defense in depth: the host's authorization provider is NOT consulted
       // for portal principals — the token's scope is the whole grant.
       if (!portalScope.allow.has(action)) return error(403, "Forbidden", { action });
-      if (
-        resource.type !== "event-type" &&
-        resource.applicationKey !== portalScope.applicationKey
-      ) {
+      // Event types are a single GLOBAL catalog shared by every application, so
+      // a token scoped to one application may only ever READ them — never
+      // mutate the catalog other tenants depend on, even if the host widened
+      // `portal.allow` to include event-type writes.
+      if (resource.type === "event-type") {
+        if (action !== "event-type:read") return error(403, "Forbidden", { action });
+        return null;
+      }
+      if (resource.applicationKey !== portalScope.applicationKey) {
         return error(403, "Forbidden", { action });
       }
       return null;

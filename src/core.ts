@@ -79,6 +79,7 @@ import {
   validateApplication,
   validateEndpoint,
   validateEventType,
+  validateKeySegment,
   ValidationError,
 } from "./validation.ts";
 
@@ -606,7 +607,11 @@ export function createWebhooksCore(options: WebhooksCoreOptions): WebhooksCore {
     let start = 0;
     if (beforeId) {
       const idx = sorted.findIndex((item) => item.id === beforeId);
-      if (idx >= 0) start = idx + 1;
+      // A cursor that no longer exists (pruned/deleted) means the page it
+      // anchored is gone — return an empty page rather than silently
+      // restarting from the newest item (which would loop the caller forever).
+      if (idx < 0) return [];
+      start = idx + 1;
     }
     return sorted.slice(start, start + pageSize(limit));
   }
@@ -1115,6 +1120,13 @@ export function createWebhooksCore(options: WebhooksCoreOptions): WebhooksCore {
       const size = new TextEncoder().encode(serializedPayload).length;
       if (size > payloadLimitBytes) throw new PayloadTooLargeError(size, payloadLimitBytes);
 
+      // The idempotency key becomes a storage key segment — reject anything that
+      // could escape its namespace or traverse the filesystem (file adapter).
+      if (input.idempotencyKey !== undefined) {
+        const issues = validateKeySegment(input.idempotencyKey, "message.idempotencyKey");
+        assertValid({ valid: issues.length === 0, errors: issues });
+      }
+
       // Idempotency short-circuit: same key + same payload returns the original.
       if (input.idempotencyKey) {
         const existingId = await storage.getItem<string>(
@@ -1359,6 +1371,7 @@ export function createWebhooksCore(options: WebhooksCoreOptions): WebhooksCore {
     },
 
     async sendExample(applicationKey, endpointId, input) {
+      guard("send example delivery"); // readonly must emit zero outbound traffic
       const endpoint = await requireEndpoint(applicationKey, endpointId);
       const messageId = newId("msg");
       const timestamp = nowIso();
@@ -1583,39 +1596,59 @@ export function createWebhooksCore(options: WebhooksCoreOptions): WebhooksCore {
     },
 
     async noteEndpointOutcome(applicationKey, endpointId, ok, policy) {
-      const endpoint = await storage.getItem<Endpoint>(endpointKey(applicationKey, endpointId));
-      if (!endpoint) return null;
-
-      if (ok) {
-        if (endpoint.firstFailingAt) {
-          await storage.setItem(endpointKey(applicationKey, endpointId), {
-            ...endpoint,
-            firstFailingAt: null,
-          });
-        }
-        return null;
-      }
-
-      const firstFailingAt = endpoint.firstFailingAt ?? nowIso();
-      let updated: Endpoint = { ...endpoint, firstFailingAt };
-
+      const key = endpointKey(applicationKey, endpointId);
       const failingForDays = policy === false ? undefined : (policy?.failingForDays ?? 5);
-      const shouldDisable =
-        failingForDays !== undefined &&
-        !updated.disabled &&
-        now() - Date.parse(firstFailingAt) > failingForDays * 86_400_000;
 
-      if (shouldDisable) {
-        updated = { ...updated, disabled: true, disabledReason: "auto", updatedAt: nowIso() };
+      // Compute the failure-accounting delta from the *latest* endpoint record,
+      // and commit it without clobbering a concurrent control-plane write
+      // (enable/disable/edit runs in the web process while the dispatcher runs
+      // here). With CAS storage this is a retry loop; without it we re-read
+      // immediately before writing to shrink — not eliminate — the window (the
+      // single-dispatcher assumption already applies to non-CAS backends).
+      const plan = (current: Endpoint): { next: Endpoint; disabled: boolean } | null => {
+        if (ok) {
+          if (!current.firstFailingAt) return null; // nothing to clear
+          return { next: { ...current, firstFailingAt: null }, disabled: false };
+        }
+        const firstFailingAt = current.firstFailingAt ?? nowIso();
+        let next: Endpoint = { ...current, firstFailingAt };
+        const shouldDisable =
+          failingForDays !== undefined &&
+          !current.disabled &&
+          now() - Date.parse(firstFailingAt) > failingForDays * 86_400_000;
+        if (shouldDisable) {
+          next = { ...next, disabled: true, disabledReason: "auto", updatedAt: nowIso() };
+        }
+        return { next, disabled: shouldDisable };
+      };
+
+      const cas = isCompareAndSwap(storage) ? storage : null;
+      let committed: { next: Endpoint; disabled: boolean } | null = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const current = await storage.getItem<Endpoint>(key);
+        if (!current) return null;
+        const planned = plan(current);
+        if (!planned) return null;
+        if (cas) {
+          const won = await cas.compareAndSwap({ key, expected: current, next: planned.next });
+          if (!won) continue; // a concurrent write landed — re-read and re-plan
+        } else {
+          await storage.setItem(key, planned.next);
+        }
+        committed = planned;
+        break;
       }
-      await storage.setItem(endpointKey(applicationKey, endpointId), updated);
+      if (!committed) return null;
+
+      const updated = committed.next;
+      const shouldDisable = committed.disabled;
 
       if (shouldDisable) {
         await appendAudit({
           action: "endpoint.disable",
           applicationKey,
           subjectId: endpointId,
-          message: `auto-disabled: failing since ${firstFailingAt}`,
+          message: `auto-disabled: failing since ${updated.firstFailingAt}`,
         });
         if (after) {
           await after({
