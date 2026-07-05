@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.2
+
+Patch — fixes the React embed leaking its styles into the host app.
+
+### Fixed
+
+- **`@xtandard/webhooks/react/styles.css` was a global, unscoped Tailwind build** — its preflight element resets (`*`, `button`, `h1`, `a`, tables) and generic utilities (`.flex`, `.border`, …) restyled the entire host app, not just the embedded dashboard. Every rule is now scoped under the embed's `.xtandard-webhooks` wrapper (preflight and utilities included), with the design tokens re-homed onto the wrapper; a build guardrail fails if any rule escapes the scope. The standalone SPA bundle (`dist/ui`) is unchanged. Base UI portals (Select/Combobox popups, Dialogs) now render inside the wrapper too, so they stay styled under the scoped stylesheet.
+
 ## v0.1.1
 
 Patch — two fixes found integrating v0.1.0 downstream (Elysia + Drizzle/Postgres + Redis).
