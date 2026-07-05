@@ -41,6 +41,18 @@ export type MessageDetail = Message & { deliveries: Delivery[] };
 /** Delivery detail (`GET .../deliveries/:id`) includes its attempt log. */
 export type DeliveryDetail = Delivery & { attempts: DeliveryAttempt[] };
 
+/**
+ * The exact signed HTTP request a delivery attempt sends
+ * (`GET .../deliveries/:id/request`). The signature and `webhook-timestamp`
+ * reflect "now" — each attempt re-signs, so these change per attempt.
+ */
+export interface SignedRequest {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
 /** `POST .../messages` result. */
 export interface PublishResponse {
   message: Message;

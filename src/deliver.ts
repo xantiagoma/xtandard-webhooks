@@ -49,6 +49,54 @@ export interface AttemptOutcome {
   at: string;
 }
 
+/** The exact HTTP request a delivery attempt sends — the inspector's view. */
+export interface SignedRequest {
+  method: "POST";
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** Input to {@link buildSignedRequest}. */
+export interface BuildSignedRequestInput {
+  endpoint: Endpoint;
+  /** `webhook-id` — the message id (stable across retries). */
+  messageId: string;
+  /** The serialized envelope body. */
+  body: string;
+  /** `user-agent` header value. */
+  userAgent?: string;
+  /** Unix millis; defaults to `Date.now()`. Determines `webhook-timestamp`. */
+  nowMs?: number;
+}
+
+/**
+ * Build the exact signed request an attempt would POST — Standard Webhooks
+ * headers, all unexpired secrets signing — **without sending it**. Shared by
+ * {@link attemptDelivery} and the panel's request inspector so what you preview
+ * is byte-for-byte what a receiver gets.
+ */
+export async function buildSignedRequest(input: BuildSignedRequestInput): Promise<SignedRequest> {
+  const nowMs = input.nowMs ?? Date.now();
+  const secrets = activeSecrets(input.endpoint, nowMs);
+  if (secrets.length === 0) {
+    throw new Error(`Endpoint ${input.endpoint.id} has no unexpired signing secret`);
+  }
+  // The timestamp is of THIS attempt (receivers check tolerance against it);
+  // the id is the message id, stable across retries (receivers dedupe on it).
+  const timestamp = Math.floor(nowMs / 1000);
+  const signature = await signatureHeader(secrets, input.messageId, timestamp, input.body);
+  const headers: Record<string, string> = {
+    ...input.endpoint.headers,
+    "content-type": "application/json",
+    "webhook-id": input.messageId,
+    "webhook-timestamp": String(timestamp),
+    "webhook-signature": signature,
+  };
+  if (input.userAgent) headers["user-agent"] = input.userAgent;
+  return { method: "POST", url: input.endpoint.url, headers, body: input.body };
+}
+
 /** The endpoint's currently-signing secrets: the active one + unexpired rotation grace. */
 export function activeSecrets(endpoint: Endpoint, nowMs: number): string[] {
   return endpoint.secrets
@@ -72,24 +120,13 @@ export async function attemptDelivery(input: AttemptDeliveryInput): Promise<Atte
   const bodyLimit = input.responseBodyLimit ?? DEFAULT_RESPONSE_BODY_LIMIT;
   const doFetch = input.fetch ?? fetch;
 
-  const secrets = activeSecrets(input.endpoint, nowMs);
-  if (secrets.length === 0) {
-    throw new Error(`Endpoint ${input.endpoint.id} has no unexpired signing secret`);
-  }
-
-  // The timestamp is of THIS attempt (receivers check tolerance against it);
-  // the id is the message id, stable across retries (receivers dedupe on it).
-  const timestamp = Math.floor(nowMs / 1000);
-  const signature = await signatureHeader(secrets, input.messageId, timestamp, input.body);
-
-  const headers: Record<string, string> = {
-    ...input.endpoint.headers,
-    "content-type": "application/json",
-    "webhook-id": input.messageId,
-    "webhook-timestamp": String(timestamp),
-    "webhook-signature": signature,
-  };
-  if (input.userAgent) headers["user-agent"] = input.userAgent;
+  const { headers } = await buildSignedRequest({
+    endpoint: input.endpoint,
+    messageId: input.messageId,
+    body: input.body,
+    nowMs,
+    ...(input.userAgent !== undefined ? { userAgent: input.userAgent } : {}),
+  });
 
   const started = Date.now();
   const controller = new AbortController();

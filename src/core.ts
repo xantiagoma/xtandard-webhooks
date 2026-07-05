@@ -17,7 +17,12 @@
  * @module
  */
 
-import { attemptDelivery, type AttemptOutcome } from "./deliver.ts";
+import {
+  attemptDelivery,
+  buildSignedRequest,
+  type AttemptOutcome,
+  type SignedRequest,
+} from "./deliver.ts";
 import {
   emitDelivery,
   type DeliveryErrorReporter,
@@ -65,6 +70,7 @@ import type {
 } from "./schema.ts";
 import { isTerminalDeliveryStatus } from "./schema.ts";
 import { generateSecret } from "./signing.ts";
+import { VERSION } from "./version.ts";
 import { hasDeliveryQueue, isCompareAndSwap, type WebhooksStorage } from "./storage/contract.ts";
 import type {
   AfterEvent,
@@ -399,6 +405,15 @@ export interface WebhooksCore {
     applicationKey: string,
     deliveryId: string,
   ): Promise<{ delivery: Delivery; attempts: DeliveryAttempt[] } | null>;
+  /**
+   * The exact signed HTTP request this delivery would send **right now** —
+   * method, URL, all headers (including the computed `webhook-signature`), and
+   * body. The inspector view: shows what a receiver gets, without sending.
+   * Returns `null` if the delivery or its endpoint no longer exists. The
+   * `webhook-timestamp`/signature reflect the current time (they change per
+   * attempt by design); the id and body are stable.
+   */
+  previewDeliveryRequest(applicationKey: string, deliveryId: string): Promise<SignedRequest | null>;
   /** Re-queue a dead-lettered delivery (`failed` → `pending`, due immediately). */
   retryDelivery(
     applicationKey: string,
@@ -1278,6 +1293,25 @@ export function createWebhooksCore(options: WebhooksCoreOptions): WebhooksCore {
       );
       if (!delivery) return null;
       return { delivery, attempts: await listAttempts(applicationKey, deliveryId) };
+    },
+
+    async previewDeliveryRequest(applicationKey, deliveryId) {
+      const delivery = await queueStorage.getItem<Delivery>(
+        deliveryKey(applicationKey, deliveryId),
+      );
+      if (!delivery) return null;
+      const [message, endpoint] = await Promise.all([
+        storage.getItem<Message>(messageKey(applicationKey, delivery.messageId)),
+        storage.getItem<Endpoint>(endpointKey(applicationKey, delivery.endpointId)),
+      ]);
+      if (!message || !endpoint) return null;
+      return buildSignedRequest({
+        endpoint,
+        messageId: message.id,
+        body: message.envelope,
+        nowMs: now(),
+        userAgent: `xtandard-webhooks/${VERSION}`,
+      });
     },
 
     async retryDelivery(applicationKey, deliveryId, opts) {

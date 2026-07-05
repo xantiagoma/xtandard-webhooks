@@ -6,7 +6,9 @@
  *
  * Commands: `serve` (panel + dispatcher, no Docker), `dispatch` (dispatcher
  * ONLY — the split-worker mode), `init`, `list-apps`, `list-endpoints`,
- * `publish`, `retry`, `verify`.
+ * `publish`, `retry`, `verify`, `sign` (build a signed request — the signature
+ * playground), and `listen` (a local inspecting receiver — the webhook.site
+ * you run yourself).
  *
  * @module
  */
@@ -283,6 +285,50 @@ async function startServer(port: number, fetch: FetchHandler): Promise<void> {
   await new Promise<void>((resolve) => server.listen(port, resolve));
 }
 
+/** Verification outcome shown by `listen` for each captured request. */
+export type InboundVerification =
+  | { state: "unchecked" } // no --secret given
+  | { state: "ok" }
+  | { state: "failed"; reason: string };
+
+/**
+ * Format one captured inbound webhook for the terminal — the `listen` command's
+ * pretty-printer. Pure and side-effect-free so it can be unit-tested.
+ */
+export function formatInboundWebhook(input: {
+  index: number;
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body: string;
+  verification: InboundVerification;
+  at: string;
+}): string {
+  const wh = (name: string) => input.headers[name] ?? input.headers[name.toLowerCase()] ?? "—";
+  const badge =
+    input.verification.state === "ok"
+      ? "signature: VERIFIED"
+      : input.verification.state === "failed"
+        ? `signature: FAILED (${input.verification.reason})`
+        : "signature: not checked (pass --secret to verify)";
+  let prettyBody = input.body;
+  try {
+    prettyBody = JSON.stringify(JSON.parse(input.body), null, 2);
+  } catch {
+    // leave non-JSON bodies as-is
+  }
+  return [
+    `\n── #${input.index}  ${input.method} ${input.path}  ${input.at} ──`,
+    `webhook-id:        ${wh("webhook-id")}`,
+    `webhook-timestamp: ${wh("webhook-timestamp")}`,
+    `webhook-signature: ${wh("webhook-signature")}`,
+    badge,
+    "body:",
+    prettyBody,
+    "",
+  ].join("\n");
+}
+
 /** Minimal flag/value argv parser: `--key value` and `--flag`. */
 function parseArgs(argv: string[]): { _: string[]; flags: Record<string, string | boolean> } {
   const _: string[] = [];
@@ -350,6 +396,14 @@ Commands:
                                 Verify a captured webhook (receiver-side debugging):
                                 reads the raw payload + a JSON headers object,
                                 prints the envelope, exits 1 on failure.
+  sign --secret <whsec_…> --data '<json>' [--id <msg_…>] [--timestamp <unix>] [--url <target>]
+                                Build a signed Standard Webhooks request (the
+                                signature playground): prints the headers + body,
+                                and a ready-to-run curl when --url is given.
+  listen [--port <n>] [--secret <whsec_…>] [--status <code>]
+                                Run a local inspecting receiver (the webhook.site
+                                you host yourself): pretty-prints every incoming
+                                webhook; with --secret, verifies the signature.
 
 Global options:
   -h, --help                    Show this help.
@@ -419,6 +473,12 @@ Examples:
 
   # Debug a captured webhook on the receiving side:
   xtandard-webhooks verify --secret whsec_… --payload-file body.json --headers-file headers.json
+
+  # Inspect webhooks locally (point an endpoint at http://localhost:4000):
+  xtandard-webhooks listen --port 4000 --secret whsec_…
+
+  # Build + fire a signed request by hand (the signature playground):
+  xtandard-webhooks sign --secret whsec_… --data '{"hi":1}' --url http://localhost:4000
 
 Receivers verify with @xtandard/webhooks/receiver — or any Standard Webhooks
 library. Docs: https://github.com/xantiagoma/xtandard-webhooks
@@ -564,6 +624,108 @@ export async function run(argv: string[]): Promise<number> {
           }
           throw err;
         }
+      }
+      case "sign": {
+        // The signature playground: build a fully signed Standard Webhooks
+        // request from a secret + payload, so you can curl it at a receiver or
+        // paste it into https://www.standardwebhooks.com/simulate.
+        if (typeof flags.secret !== "string" || typeof flags.data !== "string") {
+          process.stderr.write(
+            "Usage: xtandard-webhooks sign --secret <whsec_…> --data '<json>' [--id <msg_…>] [--timestamp <unix-seconds>] [--url <post-target>]\n",
+          );
+          return 1;
+        }
+        // Validate the payload is JSON, but sign the exact bytes given.
+        try {
+          JSON.parse(flags.data);
+        } catch {
+          process.stderr.write("Invalid --data: expected a JSON string.\n");
+          return 1;
+        }
+        const { newId } = await import("./id.ts");
+        const { sign } = await import("./signing.ts");
+        const id = typeof flags.id === "string" ? flags.id : newId("msg");
+        const timestamp =
+          typeof flags.timestamp === "string"
+            ? Number(flags.timestamp)
+            : Math.floor(Date.now() / 1000);
+        const signature = await sign(flags.secret, id, timestamp, flags.data);
+        const headerLines = [
+          `webhook-id: ${id}`,
+          `webhook-timestamp: ${timestamp}`,
+          `webhook-signature: ${signature}`,
+        ];
+        process.stdout.write(`${headerLines.join("\n")}\n\n${flags.data}\n`);
+        if (typeof flags.url === "string") {
+          const curl = [
+            `curl -X POST ${flags.url} \\`,
+            `  -H 'content-type: application/json' \\`,
+            `  -H 'webhook-id: ${id}' \\`,
+            `  -H 'webhook-timestamp: ${timestamp}' \\`,
+            `  -H 'webhook-signature: ${signature}' \\`,
+            `  -d '${flags.data.replace(/'/g, "'\\''")}'`,
+          ].join("\n");
+          process.stdout.write(`\n${curl}\n`);
+        }
+        return 0;
+      }
+      case "listen": {
+        // A local inspecting receiver — the webhook.site you run yourself.
+        // Prints every incoming request; with --secret it verifies the
+        // signature and shows a VERIFIED/FAILED badge.
+        const port = Number((flags.port as string) || env("PORT", "4000"));
+        const secret = typeof flags.secret === "string" ? flags.secret : undefined;
+        const status = typeof flags.status === "string" ? Number(flags.status) : 200;
+        const { verify, WebhookVerificationError } = await import("./signing.ts");
+        let count = 0;
+
+        await startServer(port, async (request) => {
+          const url = new URL(request.url);
+          if (url.pathname === "/healthcheck") {
+            return new Response(JSON.stringify({ status: "ok" }), {
+              headers: { "content-type": "application/json" },
+            });
+          }
+          const body = await request.text();
+          const headers: Record<string, string> = {};
+          request.headers.forEach((value, key) => {
+            headers[key] = value;
+          });
+          let verification: InboundVerification = { state: "unchecked" };
+          if (secret) {
+            try {
+              await verify({ payload: body, headers, secret });
+              verification = { state: "ok" };
+            } catch (err) {
+              verification = {
+                state: "failed",
+                reason: err instanceof WebhookVerificationError ? err.message : String(err),
+              };
+            }
+          }
+          count += 1;
+          process.stdout.write(
+            formatInboundWebhook({
+              index: count,
+              method: request.method,
+              path: url.pathname,
+              headers,
+              body,
+              verification,
+              at: new Date().toISOString(),
+            }),
+          );
+          // A signature failure answers 401 so senders exercise their retry path;
+          // otherwise echo the configured status (default 200).
+          if (verification.state === "failed")
+            return new Response("invalid signature", { status: 401 });
+          return new Response("ok", { status });
+        });
+        process.stdout.write(
+          `[xtandard/webhooks] listening for webhooks on http://localhost:${port}` +
+            `${secret ? " (verifying signatures)" : " (not verifying — pass --secret)"}\n`,
+        );
+        return await new Promise<number>(() => {});
       }
       case "dispatch": {
         const core = await makeCore();

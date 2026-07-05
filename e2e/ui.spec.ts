@@ -87,6 +87,11 @@ test("publishes via the API and the delivery succeeds in the UI", async ({ page,
   await expect(page.getByText(/Attempt #1/)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("HTTP 200").first()).toBeVisible();
 
+  // The Request inspector lazy-loads the exact signed request on demand.
+  await page.getByRole("button", { name: "Show request" }).click();
+  await expect(page.getByText("webhook-signature")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: "Copy request as a curl command" })).toBeVisible();
+
   // The message detail shows the signed envelope and links its deliveries.
   await page.goto(`/messages?app=${APP}`);
   await page.locator("button", { hasText: EVENT_TYPE }).first().click();

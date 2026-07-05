@@ -588,6 +588,21 @@ export async function handleApiRequest(
       return json({ ...found.delivery, attempts: found.attempts });
     }
 
+    m = match("/api/applications/:app/deliveries/:id/request", path);
+    if (m && method === "GET") {
+      const app = m.params.app!;
+      const id = m.params.id!;
+      const denied = await authorize("delivery:read", {
+        type: "delivery",
+        applicationKey: app,
+        deliveryId: id,
+      });
+      if (denied) return denied;
+      const preview = await ctx.core.previewDeliveryRequest(app, id);
+      if (!preview) return error(404, `delivery "${id}" not found (or its endpoint was deleted)`);
+      return json(preview);
+    }
+
     m = match("/api/applications/:app/deliveries/:id/retry", path);
     if (m && method === "POST") {
       const app = m.params.app!;

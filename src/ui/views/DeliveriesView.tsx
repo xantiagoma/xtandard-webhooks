@@ -1,10 +1,17 @@
 import React, { useState } from "react";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, RotateCcw } from "lucide-react";
-import type { DeliveryAttempt, DeliveryStatus } from "../types.ts";
+import { ArrowLeft, ChevronRight, Copy, RotateCcw, Terminal } from "lucide-react";
+import type { DeliveryAttempt, DeliveryStatus, SignedRequest } from "../types.ts";
 import { WebhooksApiError } from "../types.ts";
-import { getDelivery, listDeliveries, listEndpoints, retryDelivery } from "../api.ts";
+import {
+  getDelivery,
+  getDeliveryRequest,
+  listDeliveries,
+  listEndpoints,
+  retryDelivery,
+} from "../api.ts";
 import { useToast } from "../components/Toast.tsx";
+import { JsonCodeEditor } from "../components/JsonCodeEditor.tsx";
 import { Button, Badge } from "../components/ui-bits.tsx";
 import { Dropdown } from "../components/primitives.tsx";
 import {
@@ -94,6 +101,170 @@ function AttemptRow({ attempt }: { attempt: DeliveryAttempt }) {
         <p className="mt-1 font-mono text-[11px] text-destructive">{attempt.error}</p>
       )}
     </li>
+  );
+}
+
+/** The Standard Webhooks signing headers, called out from the transport noise. */
+const SIGNING_HEADERS = new Set(["webhook-id", "webhook-timestamp", "webhook-signature"]);
+
+/** Shell-quote a value for a single-quoted curl argument. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Assemble a copy-pasteable `curl` command from the signed request. */
+function toCurl(reqData: SignedRequest): string {
+  const parts = [`curl -X ${reqData.method} ${shellQuote(reqData.url)}`];
+  for (const [key, value] of Object.entries(reqData.headers)) {
+    parts.push(`  -H ${shellQuote(`${key}: ${value}`)}`);
+  }
+  if (reqData.body) parts.push(`  -d ${shellQuote(reqData.body)}`);
+  return parts.join(" \\\n");
+}
+
+/** Pretty-print the body if it parses as JSON; otherwise pass it through. */
+function prettyBody(body: string): string {
+  try {
+    return JSON.stringify(JSON.parse(body), null, 2);
+  } catch {
+    return body;
+  }
+}
+
+function HeaderRow({ name, value, signing }: { name: string; value: string; signing: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex gap-3 px-3 py-1.5",
+        signing && "bg-accent/[0.06] border-l-2 border-accent",
+      )}
+    >
+      <span
+        className={cn(
+          "w-44 shrink-0 break-all font-mono text-[12px]",
+          signing ? "font-semibold text-accent" : "text-foreground",
+        )}
+      >
+        {name}
+      </span>
+      <span className="min-w-0 flex-1 break-all font-mono text-[12px] text-muted-foreground">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The in-panel webhook inspector: the exact signed request a delivery sends.
+ * Lazy-loaded — the query is enabled only once the section is opened.
+ */
+function RequestInspector({ app, deliveryId }: { app: string; deliveryId: string }) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+
+  const query = useQuery({
+    queryKey: ["delivery-request", app, deliveryId],
+    queryFn: () => getDeliveryRequest(app, deliveryId),
+    enabled: open,
+  });
+
+  const copyCurl = async () => {
+    if (!query.data) return;
+    try {
+      await navigator.clipboard.writeText(toCurl(query.data));
+      toast.add(
+        "success",
+        "Copied curl command",
+        "Paste it into a terminal to replay the request.",
+      );
+    } catch {
+      toast.add("error", "Copy failed", "Clipboard access was denied by the browser.");
+    }
+  };
+
+  const data = query.data;
+  // Stable header ordering: signing headers first, then the rest as sent.
+  const headerEntries = data
+    ? Object.entries(data.headers).sort((a, b) => {
+        const as = SIGNING_HEADERS.has(a[0].toLowerCase()) ? 0 : 1;
+        const bs = SIGNING_HEADERS.has(b[0].toLowerCase()) ? 0 : 1;
+        return as - bs;
+      })
+    : [];
+
+  return (
+    <section className="rounded-xl border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <div>
+          <h2 className="text-[13px] font-semibold text-foreground">Request</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            The signature and webhook-timestamp are computed live; each attempt re-signs.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {open && data && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Copy className="size-3.5" />}
+              onClick={copyCurl}
+              aria-label="Copy request as a curl command"
+            >
+              Copy as curl
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<Terminal className="size-3.5" />}
+            aria-expanded={open}
+            aria-controls="delivery-request-panel"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? "Hide request" : "Show request"}
+          </Button>
+        </div>
+      </div>
+
+      {open && (
+        <div id="delivery-request-panel" className="px-4 py-4">
+          {query.isLoading ? (
+            <LoadingRow label="Building the signed request…" />
+          ) : query.isError || !data ? (
+            <p className="text-[13px] text-muted-foreground">
+              Could not build the request — the delivery or its endpoint may have been deleted.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="overflow-x-auto rounded-md border border-border bg-secondary/30 px-3 py-2">
+                <code className="whitespace-nowrap font-mono text-[12px] text-foreground">
+                  <span className="font-semibold text-accent">{data.method}</span> {data.url}
+                </code>
+              </div>
+
+              <div>
+                <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">Headers</h3>
+                <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
+                  {headerEntries.map(([name, value]) => (
+                    <HeaderRow
+                      key={name}
+                      name={name}
+                      value={value}
+                      signing={SIGNING_HEADERS.has(name.toLowerCase())}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">Body</h3>
+                <JsonCodeEditor value={prettyBody(data.body)} onChange={() => {}} readOnly />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -229,6 +400,10 @@ function DeliveryDetailView({
             </ul>
           )}
         </SectionCard>
+      </div>
+
+      <div className="mt-6">
+        <RequestInspector app={app} deliveryId={id} />
       </div>
     </div>
   );

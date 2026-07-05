@@ -14,6 +14,7 @@ import type {
   PublishResponse,
   RecoverResponse,
   SendExampleResponse,
+  SignedRequest,
   WebhooksConfig,
 } from "./types.ts";
 import { WebhooksApiError } from "./types.ts";
@@ -290,6 +291,14 @@ export function listDeliveries(
 
 export function getDelivery(app: string, id: string): Promise<DeliveryDetail> {
   return req<DeliveryDetail>(`${appBase(app)}/deliveries/${encodeURIComponent(id)}`);
+}
+
+/**
+ * The exact signed HTTP request this delivery sends. The signature and
+ * `webhook-timestamp` are computed live (each attempt re-signs).
+ */
+export function getDeliveryRequest(app: string, id: string): Promise<SignedRequest> {
+  return req<SignedRequest>(`${appBase(app)}/deliveries/${encodeURIComponent(id)}/request`);
 }
 
 /** Re-queue a dead-lettered delivery (`failed` → `pending`, due immediately). */

@@ -19,10 +19,13 @@ export {
 export {
   activeSecrets,
   attemptDelivery,
+  buildSignedRequest,
   DEFAULT_ATTEMPT_TIMEOUT_MS,
   DEFAULT_RESPONSE_BODY_LIMIT,
   type AttemptDeliveryInput,
   type AttemptOutcome,
+  type BuildSignedRequestInput,
+  type SignedRequest,
 } from "./deliver.ts";
 export {
   emitDelivery,
