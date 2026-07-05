@@ -3,6 +3,7 @@ import { Dialog } from "@base-ui-components/react/dialog";
 import type { DeliveryStatus } from "../types.ts";
 import { deliveryStatusLabel, deliveryStatusTone } from "../lib/format.ts";
 import { cn } from "../lib/utils.ts";
+import { portalContainerRef } from "../lib/portal-container.ts";
 import { Button } from "./ui-bits.tsx";
 
 /* ─── Spinner ───────────────────────────────────────────────────────────────── */
@@ -127,7 +128,7 @@ export function ModalDialog({
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
-      <Dialog.Portal>
+      <Dialog.Portal container={portalContainerRef()}>
         <Dialog.Backdrop className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
         <Dialog.Popup
           className={cn(

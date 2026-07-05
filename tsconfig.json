@@ -16,6 +16,12 @@
     "noUncheckedIndexedAccess": true,
     "types": ["bun"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "scripts/vendor.d.ts"
+  ],
   "exclude": ["dist", "node_modules", "test/**/*.bun.test.ts"]
 }

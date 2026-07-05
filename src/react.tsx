@@ -32,6 +32,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./ui/App.tsx";
 import { ToastProvider } from "./ui/components/Toast.tsx";
 import { setApiBase, setApiToken, type FetchLike } from "./ui/api.ts";
+import { setPortalContainerRef } from "./ui/lib/portal-container.ts";
 import { initTheme } from "./ui/theme.ts";
 import "./ui/styles.css";
 
@@ -124,6 +125,12 @@ export function WebhooksDashboard({
 
   const client = queryClient ?? getClient();
 
+  // Point Base UI portals (Select/Combobox popups, Dialogs) at the scoped
+  // wrapper so they render inside `.xtandard-webhooks` — the embed stylesheet
+  // is scoped, so anything portaled to document.body would be unstyled.
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
+  setPortalContainerRef(wrapperRef);
+
   // Resolve the routing strategy to a wouter location hook (+ base). The memory
   // hook is created once so its in-memory history survives re-renders.
   const memoryHook = React.useMemo(() => memoryLocation().hook, []);
@@ -137,7 +144,10 @@ export function WebhooksDashboard({
   return (
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <div className={className ? `xtandard-webhooks ${className}` : "xtandard-webhooks"}>
+        <div
+          ref={wrapperRef}
+          className={className ? `xtandard-webhooks ${className}` : "xtandard-webhooks"}
+        >
           <App
             locationHook={hook}
             base={base}
