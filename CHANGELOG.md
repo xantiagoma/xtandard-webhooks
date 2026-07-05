@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.1.1
+
+Patch — two fixes found integrating v0.1.0 downstream (Elysia + Drizzle/Postgres + Redis).
+
+### Fixed
+
+- **Idempotency on jsonb/key-canonicalizing control stores.** `publish()` compared payloads with an order-sensitive serialization, so a control store that reorders object keys on round-trip (Postgres `jsonb`, Drizzle) turned an identical re-publish of a multi-key payload into a false `IdempotencyConflictError`. The comparison is now canonical (recursively key-sorted) — order-insensitive and adapter-independent, while still detecting a genuinely different payload.
+- **Panel claim-safety check with a prebuilt `core`.** When a core built with a split `queueStorage` (e.g. control in Postgres, queue in Redis) was passed as `webhooksPanel({ core })`, the "no atomic claiming" warning read the panel's options instead of the core's queue storage and warned spuriously. It now reads `core.options.queueStorage` (the source of truth). Delivery was already claim-safe; only the warning was wrong. Additionally, `storage` is no longer required when a `core` is supplied, and the handler throws clearly if neither is given.
+
 ## v0.1.0
 
 First public release — a self-hosted, embeddable, [Standard Webhooks](https://www.standardwebhooks.com)-compliant outbound-webhooks control plane (a Svix alternative as a library).
