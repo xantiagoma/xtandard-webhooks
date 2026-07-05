@@ -87,6 +87,23 @@ describe("buildSignedRequest", () => {
       }),
     ).resolves.toBeDefined();
   });
+
+  test("throws when the endpoint has no unexpired signing secret", async () => {
+    const endpoint = {
+      id: "ep_1",
+      url: "https://api.example.com/hooks",
+      secrets: [
+        {
+          secret: generateSecret(),
+          createdAt: "2020-01-01T00:00:00.000Z",
+          expiresAt: "2020-01-02T00:00:00.000Z",
+        },
+      ],
+    } as Endpoint;
+    await expect(
+      buildSignedRequest({ endpoint, messageId: "msg_1", body: "{}", nowMs: 1_720_000_000_000 }),
+    ).rejects.toThrow("no unexpired signing secret");
+  });
 });
 
 describe("panel request-inspector route", () => {
@@ -134,6 +151,22 @@ describe("panel request-inspector route", () => {
       new Request("http://x/api/applications/acme/deliveries/dlv_missing/request"),
     );
     expect(res.status).toBe(404);
+  });
+
+  test("404 when the delivery's endpoint was deleted", async () => {
+    const storage = createMemoryStorage();
+    const { fetch, core } = createFetchHandler({ storage, dispatcher: false });
+    await core.createApplication({ key: "acme" });
+    await core.upsertEventType({ name: "e.t" });
+    const endpoint = await core.createEndpoint("acme", { url: "https://api.example.com/hooks" });
+    const { deliveries } = await core.publish("acme", { eventType: "e.t", payload: 1 });
+    await core.deleteEndpoint("acme", endpoint.id); // message stays, endpoint gone
+    const res = await fetch(
+      new Request(`http://x/api/applications/acme/deliveries/${deliveries[0]!.id}/request`),
+    );
+    expect(res.status).toBe(404);
+    // The core method returns null directly for this case.
+    expect(await core.previewDeliveryRequest("acme", deliveries[0]!.id)).toBeNull();
   });
 });
 

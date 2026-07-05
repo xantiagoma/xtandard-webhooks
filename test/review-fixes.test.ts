@@ -9,14 +9,16 @@ import { mkdtempSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { createWebhooksCore, ReadonlyError } from "../src/core.ts";
+import { createFetchHandler } from "../src/server/create-fetch-handler.ts";
 import { clearFileStorage, createFileStorage } from "../src/storage/file.ts";
 import { createMemoryStorage } from "../src/storage/memory.ts";
+import type { CompareAndSwapWebhooksStorage, WebhooksStorage } from "../src/storage/contract.ts";
 import { generateSecret, sign, verify } from "../src/signing.ts";
 import { createPortalToken, verifyPortalToken } from "../src/portal.ts";
 import { ValidationError } from "../src/validation.ts";
-import { fakeFetch, ok, seedBasics, setupWebhooks } from "./fixtures.ts";
+import { fakeFetch, ok, seedBasics, setupWebhooks, withoutQueueCapability } from "./fixtures.ts";
 
 const dirs: string[] = [];
 afterAll(async () => {
@@ -183,6 +185,86 @@ describe("#7 dispatcher failure-accounting does not clobber a concurrent enable"
     await core.noteEndpointOutcome("acme", endpoint.id, false, { failingForDays: 5 });
     const after = await core.getEndpoint("acme", endpoint.id);
     expect(after?.disabled).toBeUndefined(); // still enabled
+  });
+
+  it("works over storage without compare-and-swap (plain write path)", async () => {
+    const storage = withoutQueueCapability(createMemoryStorage(), { cas: false });
+    const clock = { t: 1_720_000_000_000, now: () => clock.t };
+    const core = createWebhooksCore({ storage, allowInsecureUrls: true, now: clock.now });
+    await core.createApplication({ key: "acme" });
+    const endpoint = await core.createEndpoint("acme", { url: "https://x.example/h" });
+
+    // Failure stamps the streak; success clears it; a return of null on a no-op.
+    expect(await core.noteEndpointOutcome("acme", endpoint.id, true)).toBeNull(); // nothing to clear
+    await core.noteEndpointOutcome("acme", endpoint.id, false, { failingForDays: 5 });
+    expect((await core.getEndpoint("acme", endpoint.id))?.firstFailingAt).toBeDefined();
+    await core.noteEndpointOutcome("acme", endpoint.id, true);
+    expect((await core.getEndpoint("acme", endpoint.id))?.firstFailingAt).toBeNull();
+
+    // Streak beyond the window auto-disables (no CAS available).
+    await core.noteEndpointOutcome("acme", endpoint.id, false, { failingForDays: 5 });
+    clock.t += 6 * 86_400_000;
+    const disabled = await core.noteEndpointOutcome("acme", endpoint.id, false, {
+      failingForDays: 5,
+    });
+    expect(disabled?.disabled).toBe(true);
+    expect(disabled?.disabledReason).toBe("auto");
+  });
+
+  it("retries the CAS write on a lost race and gives up after repeated contention", async () => {
+    // A compare-and-swap storage we can force to lose. `failTimes` misses (as if
+    // a concurrent writer won) then succeeds.
+    const base = createMemoryStorage();
+    let failTimes = 0;
+    const storage: WebhooksStorage & CompareAndSwapWebhooksStorage = {
+      getItem: (k) => base.getItem(k),
+      setItem: (k, v) => base.setItem(k, v),
+      removeItem: (k) => base.removeItem(k),
+      getKeys: (p) => base.getKeys(p),
+      compareAndSwap: async (input) => {
+        if (failTimes > 0) {
+          failTimes -= 1;
+          return false;
+        }
+        return base.compareAndSwap(input);
+      },
+    };
+    const core = createWebhooksCore({ storage, allowInsecureUrls: true });
+    await core.createApplication({ key: "acme" });
+    const endpoint = await core.createEndpoint("acme", { url: "https://x.example/h" });
+
+    // Lose twice, then win → the streak is still recorded.
+    failTimes = 2;
+    await core.noteEndpointOutcome("acme", endpoint.id, false, { failingForDays: 5 });
+    expect((await core.getEndpoint("acme", endpoint.id))?.firstFailingAt).toBeDefined();
+
+    // Perpetual contention (more than the retry budget) → gives up, returns null.
+    failTimes = 99;
+    expect(
+      await core.noteEndpointOutcome("acme", endpoint.id, false, { failingForDays: 5 }),
+    ).toBeNull();
+  });
+});
+
+describe("#2 the panel warns when auto-starting a dispatcher over non-claim-safe storage", () => {
+  it("warns for storage without claimDue/CAS, and does not for memory", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // File storage has neither claimDue nor compareAndSwap → warn + start.
+      const dir = freshDir();
+      const risky = createFetchHandler({ storage: createFileStorage({ dir }) });
+      expect(risky.dispatcher).not.toBeNull();
+      expect(warn.mock.calls.flat().join(" ")).toContain("without atomic claiming");
+      await risky.dispatcher?.stop();
+
+      warn.mockClear();
+      // Memory is claim-safe → no warning.
+      const safe = createFetchHandler({ storage: createMemoryStorage() });
+      expect(warn).not.toHaveBeenCalled();
+      await safe.dispatcher?.stop();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

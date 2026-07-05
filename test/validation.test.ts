@@ -5,8 +5,33 @@ import {
   validateEndpoint,
   validateEndpointUrl,
   validateEventType,
+  validateKeySegment,
   ValidationError,
 } from "../src/validation.ts";
+
+describe("validateKeySegment", () => {
+  it("accepts safe segments", () => {
+    expect(validateKeySegment("order-42", "k")).toEqual([]);
+    expect(validateKeySegment("a.b_c-1", "k")).toEqual([]);
+  });
+
+  it("rejects slashes and path separators", () => {
+    expect(validateKeySegment("x/metadata", "k")).not.toEqual([]);
+    expect(validateKeySegment("../escape", "k")).not.toEqual([]);
+    expect(validateKeySegment("a b", "k")).not.toEqual([]);
+  });
+
+  it("rejects dot-only segments", () => {
+    expect(validateKeySegment(".", "k")[0]?.message).toContain("not an allowed key");
+    expect(validateKeySegment("..", "k")[0]?.message).toContain("not an allowed key");
+    expect(validateKeySegment("...", "k")).not.toEqual([]);
+  });
+
+  it("rejects over-long segments", () => {
+    const issues = validateKeySegment("a".repeat(257), "k");
+    expect(issues[0]?.message).toContain("at most 256");
+  });
+});
 
 describe("validateApplication", () => {
   it("accepts a minimal application", () => {
