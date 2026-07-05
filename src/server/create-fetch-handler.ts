@@ -27,8 +27,12 @@ import { looksLikeAsset, serveStaticAsset } from "./static-assets.ts";
 
 /** Options for the panel handler (shared by every framework adapter). */
 export interface WebhooksPanelOptions {
-  /** Control-plane store: applications, event types, endpoints, messages, audit. */
-  storage: WebhooksStorage;
+  /**
+   * Control-plane store: applications, event types, endpoints, messages, audit.
+   * Required unless a prebuilt `core` is supplied (which carries its own
+   * storage, and its `queueStorage`, as the source of truth).
+   */
+  storage?: WebhooksStorage;
   /** Store for deliveries, attempts, and the due index. Defaults to `storage`. */
   queueStorage?: WebhooksStorage;
   /** Mount prefix, e.g. `"/webhooks"`. Default `""` (root). */
@@ -157,10 +161,16 @@ export function createFetchHandler(options: WebhooksPanelOptions): CreateFetchHa
   const uiDir = options.uiDir ?? defaultUiDir();
   const dispatcherOptions = options.dispatcher === false ? undefined : options.dispatcher;
 
+  // Either a prebuilt `core` (its own source of truth for storage) or a
+  // `storage` to build one from is required.
+  if (!options.core && !options.storage) {
+    throw new Error("createFetchHandler requires either `storage` or a prebuilt `core`. Pass one.");
+  }
+
   const core =
     options.core ??
     createWebhooksCore({
-      storage: options.storage,
+      storage: options.storage!,
       ...(options.queueStorage ? { queueStorage: options.queueStorage } : {}),
       readonly,
       ...(options.hooks !== undefined ? { hooks: options.hooks } : {}),
@@ -181,8 +191,13 @@ export function createFetchHandler(options: WebhooksPanelOptions): CreateFetchHa
     // double-send. Since the panel auto-starts one on EVERY mount, warn loudly
     // so a horizontally-scaled deployment sets `dispatcher: false` on all but
     // one instance (or runs a single split worker). See docs/DELIVERY.md.
-    const queue = options.queueStorage ?? options.storage;
-    if (queue && !hasDeliveryQueue(queue) && !isCompareAndSwap(queue)) {
+    //
+    // Check the CORE's queue storage — that is what the dispatcher actually
+    // claims over (`core.claimDueDeliveries`). It is the source of truth
+    // whether the core was built here or supplied prebuilt with its own
+    // split `queueStorage`.
+    const queue = core.options.queueStorage;
+    if (!hasDeliveryQueue(queue) && !isCompareAndSwap(queue)) {
       // eslint-disable-next-line no-console
       console.warn(
         "[@xtandard/webhooks] The panel started an in-process dispatcher over storage " +

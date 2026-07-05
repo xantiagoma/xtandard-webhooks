@@ -17,6 +17,7 @@
  * @module
  */
 
+import { canonicalStringify } from "./canonical.ts";
 import {
   attemptDelivery,
   buildSignedRequest,
@@ -1150,7 +1151,12 @@ export function createWebhooksCore(options: WebhooksCoreOptions): WebhooksCore {
         if (existingId) {
           const existing = await storage.getItem<Message>(messageKey(applicationKey, existingId));
           if (existing) {
-            if (JSON.stringify(existing.payload) !== serializedPayload) {
+            // Compare canonically: some control stores (Postgres jsonb, some
+            // BSON paths) reorder object keys on round-trip, so the stored
+            // payload may read back with a different key order than the fresh
+            // one. An order-sensitive check would flag an identical re-publish
+            // as a conflict — canonical form makes the comparison uniform.
+            if (canonicalStringify(existing.payload) !== canonicalStringify(input.payload)) {
               throw new IdempotencyConflictError(input.idempotencyKey);
             }
             const deliveryIds = (
