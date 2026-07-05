@@ -67,7 +67,9 @@ Receivers in other languages use the official Standard Webhooks libraries unmodi
 
 ## 5. Watch it work
 
-The **Deliveries** view shows every attempt with HTTP detail; **Send example** on an endpoint fires a signed test event; a failing endpoint walks the retry schedule into the Dead-letter tab, where **Retry** re-queues it.
+The **Deliveries** view shows every attempt with HTTP detail (and a **Request** inspector for the exact signed bytes sent); **Send example** on an endpoint fires a signed test event; a failing endpoint walks the retry schedule into the Dead-letter tab, where **Retry** re-queues it.
+
+Developing the receiver? Run a local inspecting receiver — `xtandard-webhooks listen --secret <your secret>` — point an endpoint at `http://localhost:4000`, and read verified events as they arrive. See [docs/TESTING.md](TESTING.md).
 
 ## Where to next
 

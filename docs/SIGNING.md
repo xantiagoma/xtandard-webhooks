@@ -73,3 +73,9 @@ err := wh.Verify(body, headers)
 | `WebhookVerificationError`                                      | thrown on any verification failure (`err.name` set) |
 
 Zero dependencies, Web Crypto only — works in Bun, Node ≥ 20, Deno, and Workers.
+
+## Debugging signatures from the shell
+
+- `xtandard-webhooks sign --secret whsec_… --data '<json>' [--url <target>]` — build a fully signed request (headers + body, and a ready-to-run `curl` with `--url`). The signature playground; cross-check against https://www.standardwebhooks.com/simulate.
+- `xtandard-webhooks verify --secret whsec_… --payload-file body.json --headers-file headers.json` — verify a captured webhook and print the envelope (exit 1 on failure).
+- `xtandard-webhooks listen --secret whsec_…` — a local receiver that verifies every incoming request and prints a VERIFIED/FAILED badge. See [docs/TESTING.md](TESTING.md).

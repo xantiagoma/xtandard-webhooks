@@ -39,14 +39,14 @@ Props (both components unless noted): `baseUrl` (where the panel is mounted), `c
 
 Served by every adapter at the mount point; no React required in the host. Views:
 
-| View        | What it does                                                                                                                                                               |
-| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Overview    | per-application 24h attempts, success rate, dead-letter count, recent failures                                                                                             |
-| Endpoints   | list + detail: URL/description, subscriptions, custom headers, secret reveal/rotate (grace note), send example, recover since-date, enable/disable, type-to-confirm delete |
-| Event Types | grouped catalog, description + JSON-schema editor, deprecated flag; the catalog is public at `/api/event-types.json`                                                       |
-| Messages    | filterable log with cursor pagination; detail = envelope viewer + its deliveries                                                                                           |
-| Deliveries  | the operational heart: All/Pending/Succeeded/Dead-letter tabs, endpoint filter, attempt timeline (status, duration, truncated response body, trigger), Retry               |
-| Audit       | who did what, when                                                                                                                                                         |
+| View        | What it does                                                                                                                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overview    | per-application 24h attempts, success rate, dead-letter count, recent failures                                                                                                                                                                                                              |
+| Endpoints   | list + detail: URL/description, subscriptions, custom headers, secret reveal/rotate (grace note), send example, recover since-date, enable/disable, type-to-confirm delete                                                                                                                  |
+| Event Types | grouped catalog, description + JSON-schema editor, deprecated flag; the catalog is public at `/api/event-types.json`                                                                                                                                                                        |
+| Messages    | filterable log with cursor pagination; detail = envelope viewer + its deliveries                                                                                                                                                                                                            |
+| Deliveries  | the operational heart: All/Pending/Succeeded/Dead-letter tabs, endpoint filter, attempt timeline (status, duration, truncated response body, trigger), Retry, and a **Request** inspector showing the exact signed request sent (headers incl. `webhook-signature`, body) with Copy-as-curl |
+| Audit       | who did what, when                                                                                                                                                                                                                                                                          |
 
 The application switcher lives in the shell (`?app=` in the URL). Portal mode (a request authenticated by a `whpt_` token, or `?token=whpt_…` on the SPA URL) renders the reduced chrome from the same bundle.
 

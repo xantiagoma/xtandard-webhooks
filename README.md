@@ -285,9 +285,22 @@ xtandard-webhooks list-endpoints --app acme
 xtandard-webhooks publish --app acme --type invoice.paid --data '{"n":1}'
 xtandard-webhooks retry --app acme --delivery dlv_…
 xtandard-webhooks verify --secret whsec_… --payload-file body.json --headers-file headers.json
+xtandard-webhooks listen --port 4000 --secret whsec_…   # local inspecting receiver
+xtandard-webhooks sign --secret whsec_… --data '{"n":1}' --url http://localhost:4000
 ```
 
 Env contract (storage drivers, auth, retention, `RETRY_SCHEDULE`, …): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+## Testing webhooks
+
+Self-hosted equivalents of webhook.site / Svix Play / the Standard Webhooks simulator — no hosting, no accounts:
+
+- **`xtandard-webhooks listen`** — a local inspecting receiver: point an endpoint at `http://localhost:4000` and every incoming webhook is pretty-printed; with `--secret` it verifies the signature (VERIFIED/FAILED) and answers 401 on failure so senders exercise their retry path.
+- **`xtandard-webhooks sign`** — the signature playground: builds a fully signed request from a secret + payload, printing the headers/body and a ready-to-run `curl` (with `--url`).
+- **Panel "Request" inspector** — on any delivery's detail, see the exact signed request it sends (method, URL, all headers including `webhook-signature`, body) with a Copy-as-curl button.
+- **`@xtandard/webhooks/testing`** — programmatic: `createTestReceiver` (a verifying local receiver) + `drainDeliveries` for deterministic tests.
+
+See [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 

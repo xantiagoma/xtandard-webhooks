@@ -2,6 +2,18 @@
 
 Both how this repo is tested and what it ships for testing _your_ webhook wiring.
 
+## Interactive tools (the self-hosted webhook.site / simulator)
+
+No hosted bins, no accounts — the equivalents of webhook.site, Svix Play, and the Standard Webhooks simulator, run locally:
+
+| Tool                                                                                   | What it does                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `xtandard-webhooks listen [--port n] [--secret whsec_…] [--status code]`               | A local inspecting receiver. Pretty-prints every incoming webhook (headers, body); with `--secret` it verifies the signature and shows a VERIFIED/FAILED badge, answering `401` on failure so a sender walks its retry path. Point an endpoint's URL at `http://localhost:4000`. |
+| `xtandard-webhooks sign --secret whsec_… --data '<json>' [--id] [--timestamp] [--url]` | The signature playground: builds a fully signed Standard Webhooks request and prints the headers + body — plus a ready-to-run `curl` when `--url` is given. Paste into https://www.standardwebhooks.com/simulate to cross-check.                                                 |
+| Panel **Request** inspector                                                            | On a delivery's detail page, expand "Request" to see the exact signed request that delivery sends (method, URL, all headers incl. `webhook-signature`, body) with a Copy-as-curl button. Backed by `GET /api/applications/:app/deliveries/:id/request`.                          |
+
+The loop for a receiver developer: `xtandard-webhooks listen --secret <your secret>`, point an endpoint at it, publish (or hit "Send example"), and read the verified events as they arrive. To reproduce a specific signed request by hand, use `sign`.
+
 ## Testing your app: `@xtandard/webhooks/testing`
 
 ```ts
