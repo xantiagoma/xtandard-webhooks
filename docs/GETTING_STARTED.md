@@ -16,7 +16,7 @@ import { createMemoryStorage } from "@xtandard/webhooks/storage/memory";
 
 const webhooks = webhooksPanel({ storage: createMemoryStorage() });
 
-new Elysia().mount("/webhooks", webhooks.fetch).listen(3000);
+new Elysia().mount("/webhooks", webhooks).listen(3000);
 ```
 
 Open http://localhost:3000/webhooks — the admin UI is live, and an in-process dispatcher is already running. Memory storage is for the first five minutes; swap in your real DB with one line (`docs/STORAGE.md`).

@@ -93,7 +93,7 @@ import { webhooksPanel } from "@xtandard/webhooks/elysia";
 import { createMemoryStorage } from "@xtandard/webhooks/storage/memory";
 
 const webhooks = webhooksPanel({ storage: createMemoryStorage() });
-new Elysia().mount("/webhooks", webhooks.fetch).listen(3000);
+new Elysia().mount("/webhooks", webhooks).listen(3000);
 ```
 
 </details>

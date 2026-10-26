@@ -31,7 +31,13 @@ gh run watch
 npm view @xtandard/webhooks version
 ```
 
-Requirements: the `NPM_TOKEN` repo secret (npm automation token with publish rights to `@xtandard`), and `.npmrc` keeps `provenance=true`.
+Requirements: npm **trusted publishing** (OIDC) for this repo + `release.yml` — no token to store or rotate — and `.npmrc` keeps `provenance=true`. Set the trust up once (npm >= 11.10, logged in as a package owner):
+
+```sh
+npx npm@latest trust github @xtandard/webhooks --repo xantiagoma/xtandard-webhooks --file release.yml --allow-publish
+```
+
+**Publish failed for a tag?** Re-run it without cutting a new version: `gh workflow run release.yml -f tag=vX.Y.Z`.
 
 ## Conventional commits
 

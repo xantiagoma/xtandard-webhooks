@@ -20,7 +20,7 @@ import { Elysia } from "elysia";
 import { webhooksPanel } from "@xtandard/webhooks/elysia";
 
 const webhooks = webhooksPanel({ storage });
-new Elysia().mount("/webhooks", webhooks.fetch).listen(3000);
+new Elysia().mount("/webhooks", webhooks).listen(3000);
 ```
 
 For end-to-end typed clients (Eden), use the typed plugin instead — it declares every admin route with schemas:
