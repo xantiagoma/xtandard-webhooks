@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/logo-256.png" alt="@xtandard/webhooks" width="128" height="128" />
+
 # @xtandard/webhooks
 
 **Self-hosted, embeddable, [Standard Webhooks](https://www.standardwebhooks.com)-compliant outbound-webhooks control plane.**
@@ -10,7 +12,7 @@ Mount it inside your existing app, point it at the database you already run, and
 [![npm](https://img.shields.io/npm/v/%40xtandard%2Fwebhooks)](https://www.npmjs.com/package/@xtandard/webhooks)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-<img src="docs/assets/deliveries.png" alt="Deliveries view: attempt timeline with retries and dead-letters" width="800" />
+<img src="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/deliveries.png" alt="Deliveries view: attempt timeline with retries and dead-letters" width="800" />
 
 </div>
 
@@ -271,9 +273,9 @@ Split planes: control data in Postgres, delivery queue in Redis — `queueStorag
 
 ## Screenshots
 
-|                                       |                                         |
-| ------------------------------------- | --------------------------------------- |
-| ![Overview](docs/assets/overview.png) | ![Endpoints](docs/assets/endpoints.png) |
+|                                                                                                           |                                                                                                             |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| ![Overview](https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/overview.png) | ![Endpoints](https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/endpoints.png) |
 
 ## CLI
 
