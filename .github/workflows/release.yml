@@ -58,20 +58,27 @@ jobs:
       - name: Publish to npm (with provenance)
         run: npm publish --provenance --access public
 
-      # Turn the pushed tag into a GitHub Release (shown on /releases) with notes
-      # auto-generated from the commits since the previous tag.
+      # Turn the pushed tag into a GitHub Release (shown on /releases). Notes are
+      # the tag's CHANGELOG.md section — `--generate-notes` only lists merged PRs,
+      # and releases here are direct pushes, so it would be just a compare link.
       - name: Create or publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
+          awk -v h="## ${TAG}" '$0 == h { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > notes.md
+          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
+          if [ -n "${PREV}" ]; then
+            printf '\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
+              "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${PREV}" "${TAG}" >> notes.md
+          fi
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "Release ${TAG} exists — publishing it."
-            gh release edit "${TAG}" --draft=false --latest
+            gh release edit "${TAG}" --draft=false --latest --notes-file notes.md
           else
             gh release create "${TAG}" \
               --title "${TAG}" \
-              --generate-notes \
+              --notes-file notes.md \
               --verify-tag \
               --latest
           fi
