@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.1.3
+
+Elysia 2 support.
+
+### Added
+
+- **`@xtandard/webhooks/elysia2`** — the Elysia adapter for Elysia 2 (`elysia@rc`). Elysia 2 takes routes as `(path, hook, handler)` and changed its class generics, so the typed `webhooksElysia` plugin from `/elysia` throws on v2 and its types don't reach Eden. The new subpath ships the same surface (`webhooksPanel` + `webhooksElysia`) built and typed against Elysia 2; pair it with `@elysia/eden`. `/elysia` is unchanged for 1.x, and its `webhooksPanel` mount handler works on both majors.
+- Docs: a `.wrap()` + `AsyncLocalStorage` recipe for request context in hooks and auth providers (docs/ADAPTERS.md).
+
+### Changed
+
+- Peer range `elysia: ^1.0.0 || ^2.0.0-0`, so Elysia 2 prereleases satisfy it.
+
 ## v0.1.2
 
 Patch — fixes the React embed leaking its styles into the host app.

@@ -1,6 +1,6 @@
 {
   "name": "@xtandard/webhooks",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Self-hosted, embeddable, Standard Webhooks-compliant outbound webhook control plane with pluggable storage, an in-process delivery engine, and an embeddable consumer portal.",
   "keywords": [
     "bun",
