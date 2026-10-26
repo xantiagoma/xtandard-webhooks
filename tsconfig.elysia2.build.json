@@ -1,0 +1,13 @@
+{
+  // Emits the `@xtandard/webhooks/elysia2` declarations against Elysia 2 (the pack
+  // build's own .d.ts for that entry would be typed against Elysia 1).
+  "extends": "./tsconfig.elysia2.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist/types-elysia2",
+    "rootDir": "src"
+  },
+  "include": ["src/entry-elysia2.ts"]
+}

@@ -23,5 +23,13 @@
     "test/**/*.tsx",
     "scripts/vendor.d.ts"
   ],
-  "exclude": ["dist", "node_modules", "test/**/*.bun.test.ts"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "test/**/*.bun.test.ts",
+    // Built/checked against Elysia 2 via tsconfig.elysia2.json.
+    "src/adapters/elysia2.ts",
+    "src/entry-elysia2.ts",
+    "test/elysia2.test.ts"
+  ]
 }

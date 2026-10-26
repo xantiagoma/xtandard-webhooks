@@ -26,30 +26,16 @@
  */
 
 import { Elysia, t } from "elysia";
-import { createFetchHandler, type WebhooksPanelOptions } from "../server/create-fetch-handler.ts";
+import {
+  createPass,
+  webhooksPanel,
+  type ElysiaWebhooksHandler,
+  type WebhooksElysiaOptions,
+  type WebhooksPanelOptions,
+} from "./elysia-shared.ts";
 
-/** A web-standard fetch handler with `core` + `dispatcher` + `openapi()` attached. */
-export type ElysiaWebhooksHandler = ((request: Request) => Promise<Response>) & {
-  core: ReturnType<typeof createFetchHandler>["core"];
-  dispatcher: ReturnType<typeof createFetchHandler>["dispatcher"];
-  openapi: ReturnType<typeof createFetchHandler>["openapi"];
-};
-
-/** Create a panel handler suitable for `Elysia.mount(path, handler)`. */
-export function webhooksPanel(options: WebhooksPanelOptions): ElysiaWebhooksHandler {
-  const handler = createFetchHandler(options);
-  const fn = ((request: Request) => handler.fetch(request)) as ElysiaWebhooksHandler;
-  fn.core = handler.core;
-  fn.dispatcher = handler.dispatcher;
-  fn.openapi = handler.openapi;
-  return fn;
-}
-
-/** Options for {@link webhooksElysia}. */
-export interface WebhooksElysiaOptions extends WebhooksPanelOptions {
-  /** Mount prefix; also used as the panel basePath. Default `"/webhooks"`. */
-  prefix?: string;
-}
+export { webhooksPanel };
+export type { ElysiaWebhooksHandler, WebhooksElysiaOptions, WebhooksPanelOptions };
 
 const appParams = t.Object({ app: t.String() });
 const endpointParams = t.Object({ app: t.String(), id: t.String() });
@@ -61,26 +47,11 @@ const nameParams = t.Object({ name: t.String() });
  * Routes are declared for the typed surface; every handler delegates to the
  * shared fetch pipeline (auth, authorization, portal scoping, error mapping
  * reused). A catch-all also serves the bundled UI.
+ *
+ * Elysia 1.x only — for Elysia 2 import from `@xtandard/webhooks/elysia2`.
  */
 export function webhooksElysia(options: WebhooksElysiaOptions) {
-  const prefix = options.prefix ?? "/webhooks";
-  const handler = createFetchHandler({ ...options, basePath: options.basePath ?? prefix });
-
-  // Elysia parses the body for declared routes, draining the stream; rebuild the
-  // Request from the parsed body before delegating (mirrors the Express adapter).
-  const pass = (ctx: { request: Request; body?: unknown }): Promise<Response> => {
-    const r = ctx.request;
-    if (ctx.body != null && (r.method === "POST" || r.method === "PUT")) {
-      return handler.fetch(
-        new Request(r.url, {
-          method: r.method,
-          headers: r.headers,
-          body: JSON.stringify(ctx.body),
-        }),
-      );
-    }
-    return handler.fetch(r);
-  };
+  const { prefix, pass } = createPass(options);
 
   const app = "/api/applications/:app";
   const endpoint = `${app}/endpoints/:id`;
@@ -157,5 +128,3 @@ export function webhooksElysia(options: WebhooksElysiaOptions) {
     .get(`${app}/audit`, pass, { params: appParams })
     .all("/*", pass); // bundled UI assets + SPA fallback
 }
-
-export type { WebhooksPanelOptions };

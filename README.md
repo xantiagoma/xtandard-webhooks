@@ -250,6 +250,7 @@ Split planes: control data in Postgres, delivery queue in Redis — `queueStorag
 | `…/authorization/{none,roles,delegated}` | authorization providers                                                     |
 | `…/hooks/log`                            | reference logging hook                                                      |
 | `…/{elysia,hono,express,bun}`            | framework adapters                                                          |
+| `…/elysia2`                              | Elysia 2 adapter (typed for Elysia 2 + `@elysia/eden`)                      |
 | `…/react`, `…/react/styles.css`          | `<WebhooksDashboard>` + `<WebhooksPortal>` embeds                           |
 
 ## Examples

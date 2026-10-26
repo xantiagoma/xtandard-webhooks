@@ -314,6 +314,16 @@
         "default": "./dist/entry-elysia.cjs"
       }
     },
+    "./elysia2": {
+      "import": {
+        "types": "./dist/types-elysia2/entry-elysia2.d.ts",
+        "default": "./dist/entry-elysia2.mjs"
+      },
+      "require": {
+        "types": "./dist/types-elysia2/entry-elysia2.d.ts",
+        "default": "./dist/entry-elysia2.cjs"
+      }
+    },
     "./hono": {
       "import": {
         "types": "./dist/entry-hono.d.mts",
@@ -358,16 +368,17 @@
     "access": "public"
   },
   "scripts": {
-    "build": "bun run build:lib && bun run build:ui && bun run build:react",
+    "build": "bun run build:lib && bun run build:elysia2-types && bun run build:ui && bun run build:react",
     "build:lib": "vp pack",
+    "build:elysia2-types": "tsc -p tsconfig.elysia2.build.json && bun scripts/fix-elysia2-types.ts",
     "test": "vp test run",
     "test:coverage": "vp test run --coverage",
     "test:bun": "bun test ./test/*.bun.test.ts",
     "lint": "vp lint",
     "format": "vp fmt",
     "format:check": "vp fmt --check",
-    "typecheck": "tsc --noEmit",
-    "check": "vp lint && vp fmt --check && tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.elysia2.json",
+    "check": "vp lint && vp fmt --check && bun run typecheck",
     "prepare": "husky || true",
     "build:ui": "vite build --config vite.ui.config.ts",
     "dev:ui": "vite --config vite.ui.config.ts",
@@ -398,6 +409,7 @@
     "@codemirror/state": "^6.7.0",
     "@codemirror/view": "^6.43.4",
     "@electric-sql/pglite": "^0.2.0",
+    "@elysia/eden": "2.0.0-rc.0",
     "@elysiajs/eden": "^1.4",
     "@playwright/test": "^1.49.0",
     "@tailwindcss/vite": "^4.0.0",
@@ -414,6 +426,8 @@
     "clsx": "^2.1",
     "drizzle-orm": "^0.45.2",
     "elysia": "^1.4",
+    "elysia-v2": "npm:elysia@2.0.0-rc.0",
+    "exact-mirror": "^1.2.6",
     "express": "^5.0.0",
     "get-port-please": "^3.2.0",
     "hono": "^4.6.0",
@@ -429,6 +443,7 @@
     "redis": "^5.0.0",
     "tailwind-merge": "^3.6",
     "tailwindcss": "^4.0.0",
+    "typebox": "^1.4.3",
     "typedoc": "^0.28.19",
     "typescript": "^5.7.0",
     "unstorage": "^1.13.0",
@@ -438,7 +453,7 @@
   "peerDependencies": {
     "@libsql/client": "0.15.15",
     "drizzle-orm": ">=0.44.0 || >=1.0.0-0",
-    "elysia": "^1.0.0 || ^2.0.0",
+    "elysia": "^1.0.0 || ^2.0.0-0",
     "express": "^4.0.0 || ^5.0.0",
     "hono": "^4.0.0",
     "mongodb": "^5.0.0 || ^6.0.0",

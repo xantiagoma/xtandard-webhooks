@@ -1,0 +1,13 @@
+{
+  // The Elysia 2 adapter + its tests import plain `elysia` (what consumers install)
+  // but are checked and built against the `elysia-v2` devDep alias. That also
+  // resolves `elysia` inside `@elysia/eden` (Elysia 2's Eden) to v2.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "elysia": ["./node_modules/elysia-v2"]
+    }
+  },
+  "include": ["src/adapters/elysia2.ts", "src/entry-elysia2.ts", "test/elysia2.test.ts"],
+  "exclude": ["dist", "node_modules"]
+}

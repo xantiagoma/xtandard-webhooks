@@ -32,6 +32,50 @@ const app = new Elysia().use(webhooksElysia({ prefix: "/webhooks", storage })).l
 export type App = typeof app; // → treaty<App> infers the whole webhooks API
 ```
 
+### Elysia 2 — `@xtandard/webhooks/elysia2`
+
+Elysia 2 (currently `elysia@rc`) changed two things that matter to the typed plugin: routes take `(path, hook, handler)` instead of `(path, handler, hook)`, and the `Elysia` class generics changed — so a plugin's `.d.ts` built against one major doesn't type-check (or feed Eden) on the other. `@xtandard/webhooks/elysia2` is the same surface — `webhooksPanel` and `webhooksElysia` — built and typed against Elysia 2:
+
+```ts
+import { Elysia } from "elysia"; // 2.x
+import { webhooksElysia } from "@xtandard/webhooks/elysia2";
+
+const app = new Elysia().use(webhooksElysia({ prefix: "/webhooks", storage })).listen(3000);
+export type App = typeof app;
+```
+
+```ts
+import { treaty } from "@elysia/eden"; // Elysia 2's Eden (was @elysiajs/eden)
+const client = treaty<App>("localhost:3000");
+await client.webhooks!.api.applications.get();
+```
+
+| Elysia | Import from                  | Eden client      |
+| ------ | ---------------------------- | ---------------- |
+| 1.x    | `@xtandard/webhooks/elysia`  | `@elysiajs/eden` |
+| 2.x    | `@xtandard/webhooks/elysia2` | `@elysia/eden`   |
+
+`webhooksPanel` (the `.mount()` handler) is version-agnostic and works from either import; only the typed `webhooksElysia` plugin is tied to a major.
+
+### Request context with `.wrap()`
+
+`.wrap()` wraps the whole fetch pipeline (mounted handlers included), so an `AsyncLocalStorage` store set there is visible to your `before` hooks and delegated auth/authorization providers — no adapter needed:
+
+```ts
+import { AsyncLocalStorage } from "node:async_hooks";
+
+const requestContext = new AsyncLocalStorage<{ userId?: string }>();
+
+new Elysia()
+  .wrap(
+    (fetch) => (request) =>
+      requestContext.run({ userId: userIdFrom(request) }, () => fetch(request)),
+  )
+  .mount("/webhooks", webhooksPanel({ storage, hooks: [auditHook(requestContext)] }));
+```
+
+The dispatcher runs on its own ticks, outside any request: `delivery.*` `after` hooks and the `onDelivery` sink always see an empty store. Anything they need from the originating request (a trace id, the acting user) belongs in the message itself at `publish()` time.
+
 ## Hono
 
 ```ts

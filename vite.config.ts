@@ -2,8 +2,29 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   test: {
-    include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
-    exclude: ["node_modules/**", "dist/**", "e2e/**", "test/**/*.bun.test.ts"],
+    // Two projects: everything on Elysia 1.x, plus the Elysia 2 adapter test with
+    // `elysia` aliased to the `elysia-v2` devDep (mirrors tsconfig.elysia2.json).
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "core",
+          include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
+          exclude: [
+            "node_modules/**",
+            "dist/**",
+            "e2e/**",
+            "test/**/*.bun.test.ts",
+            "test/elysia2.test.ts",
+          ],
+        },
+      },
+      {
+        extends: true,
+        resolve: { alias: { elysia: "elysia-v2" } },
+        test: { name: "elysia2", include: ["test/elysia2.test.ts"] },
+      },
+    ],
     // A couple of integration tests depend on live Redis/Mongo pub-sub & timer
     // timing; retry absorbs rare scheduling flakes (esp. under coverage load).
     retry: 2,
@@ -68,6 +89,8 @@ export default defineConfig({
       "src/entry-hooks-log.ts",
       "src/entry-bun.ts",
       "src/entry-elysia.ts",
+      // Types come from tsconfig.elysia2.build.json (built against Elysia 2), not here.
+      "src/entry-elysia2.ts",
       "src/entry-express.ts",
       "src/entry-hono.ts",
       "src/cli.ts",
