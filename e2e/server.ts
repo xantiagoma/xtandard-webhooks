@@ -12,6 +12,8 @@
  *   GET /healthcheck             → 200 (webServer readiness probe)
  *   GET /e2e/receiver            → { url }  the in-process receiver's URL
  *   GET /e2e/portal-token?app=X  → { token } a freshly minted portal token
+ *   GET /e2e/embed?theme=&host=  → a host page mounting the built React embed
+ *                                  (host: class | attr | none → dark class / data-theme)
  */
 
 import {
@@ -74,6 +76,37 @@ const { fetch: panelFetch } = createFetchHandler({
   portal: { secret: PORTAL_SECRET },
 });
 
+// React-embed host page (e2e/embed.spec.ts). Host styles mimic a themed app:
+// its own text/background per theme, so a panel that leaks or inherits the
+// host's text color shows up as low contrast.
+const EMBED_HOST_HTML = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>embed host</title>
+    <link rel="stylesheet" href="/e2e/react.css" />
+    <style>
+      body { margin: 0; font-family: system-ui; background: #ffffff; color: #111111; }
+      html.dark body, html[data-theme="dark"] body { background: #0b0b0c; color: #f4f4f5; }
+    </style>
+  </head>
+  <body>
+    <div id="host-root"></div>
+    <script type="module" src="/e2e/embed.js"></script>
+  </body>
+</html>`;
+
+let embedBundle: Promise<string> | undefined;
+const buildEmbedHost = async (): Promise<string> => {
+  const result = await Bun.build({
+    entrypoints: [new URL("./embed-host.tsx", import.meta.url).pathname],
+    target: "browser",
+    define: { "process.env.NODE_ENV": '"production"' },
+  });
+  if (!result.success) throw new AggregateError(result.logs, "embed host bundle failed");
+  return result.outputs[0]!.text();
+};
+
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), {
     status,
@@ -86,6 +119,26 @@ Bun.serve({
     const url = new URL(request.url);
     if (url.pathname === "/healthcheck") return json({ ok: true });
     if (url.pathname === "/e2e/receiver") return json({ url: receiver.url });
+    if (url.pathname === "/e2e/embed") {
+      const markup =
+        url.searchParams.get("host") === "attr"
+          ? EMBED_HOST_HTML.replace('<html lang="en">', '<html lang="en" data-theme="dark">')
+          : url.searchParams.get("host") === "class"
+            ? EMBED_HOST_HTML.replace('<html lang="en">', '<html lang="en" class="dark">')
+            : EMBED_HOST_HTML;
+      return new Response(markup, { headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+    if (url.pathname === "/e2e/embed.js") {
+      embedBundle ??= buildEmbedHost();
+      return new Response(await embedBundle, {
+        headers: { "content-type": "text/javascript; charset=utf-8" },
+      });
+    }
+    if (url.pathname === "/e2e/react.css") {
+      return new Response(Bun.file(new URL("../dist/react.css", import.meta.url)), {
+        headers: { "content-type": "text/css; charset=utf-8" },
+      });
+    }
     if (url.pathname === "/e2e/portal-token") {
       const app = url.searchParams.get("app") ?? "acme";
       const expiresIn = url.searchParams.get("expiresIn") ?? "1h";

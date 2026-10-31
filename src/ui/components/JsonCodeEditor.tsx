@@ -3,7 +3,7 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { json } from "@codemirror/lang-json";
 import {
   bracketMatching,
-  defaultHighlightStyle,
+  HighlightStyle,
   indentOnInput,
   syntaxHighlighting,
 } from "@codemirror/language";
@@ -15,6 +15,41 @@ import {
   lineNumbers,
   placeholder,
 } from "@codemirror/view";
+import { tags } from "@lezer/highlight";
+
+// Syntax + chrome colors come from the theme tokens (styles.css), so the editor
+// follows whichever theme its nearest `data-theme` resolves to — light or dark,
+// standalone or embedded — instead of CodeMirror's fixed light palette.
+const jsonHighlight = HighlightStyle.define([
+  { tag: tags.propertyName, color: "var(--accent)" },
+  { tag: tags.string, color: "var(--success)" },
+  { tag: [tags.number, tags.bool, tags.null], color: "var(--warning)" },
+  { tag: [tags.brace, tags.squareBracket, tags.separator], color: "var(--muted-foreground)" },
+]);
+
+const tokenTheme = EditorView.theme({
+  "&": { fontSize: "12px", color: "var(--foreground)", backgroundColor: "transparent" },
+  "&.cm-focused": { outline: "none" },
+  ".cm-content": {
+    fontFamily:
+      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace",
+    caretColor: "var(--foreground)",
+  },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
+  ".cm-gutters": {
+    backgroundColor: "transparent",
+    color: "var(--muted-foreground)",
+    border: "none",
+  },
+  ".cm-activeLine": { backgroundColor: "color-mix(in oklab, var(--foreground) 4%, transparent)" },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, ::selection":
+    { backgroundColor: "color-mix(in oklab, var(--accent) 25%, transparent)" },
+  ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
+    backgroundColor: "color-mix(in oklab, var(--accent) 18%, transparent)",
+    outline: "none",
+  },
+  ".cm-placeholder": { color: "var(--muted-foreground)" },
+});
 
 /**
  * A small controlled CodeMirror 6 editor for JSON. Syntax highlighting + line
@@ -50,7 +85,7 @@ export function JsonCodeEditor({
         indentOnInput(),
         bracketMatching(),
         highlightActiveLine(),
-        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntaxHighlighting(jsonHighlight),
         json(),
         placeholder(placeholderText),
         keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -58,15 +93,7 @@ export function JsonCodeEditor({
         EditorView.updateListener.of((u) => {
           if (u.docChanged) onChangeRef.current(u.state.doc.toString());
         }),
-        EditorView.theme({
-          "&": { fontSize: "12px", backgroundColor: "transparent" },
-          "&.cm-focused": { outline: "none" },
-          ".cm-content": {
-            fontFamily:
-              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace",
-          },
-          ".cm-gutters": { backgroundColor: "transparent", border: "none" },
-        }),
+        tokenTheme,
       ],
     });
     const v = new EditorView({ state, parent: host.current });

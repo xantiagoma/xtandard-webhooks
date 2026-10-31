@@ -214,7 +214,7 @@ const token = await createPortalToken(process.env.PORTAL_SECRET!, customer.appKe
 import { WebhooksPortal } from "@xtandard/webhooks/react";
 import "@xtandard/webhooks/react/styles.css";
 
-<WebhooksPortal baseUrl="/webhooks" token={token} />;
+<WebhooksPortal apiBaseUrl="/webhooks" token={token} />;
 ```
 
 Cross-application access is denied by construction — the host's authorization is never consulted for portal principals. Details: [docs/PORTAL.md](docs/PORTAL.md).

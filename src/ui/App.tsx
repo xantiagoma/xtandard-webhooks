@@ -58,6 +58,7 @@ export function App({
   base = "",
   logoUrl,
   initialApplicationKey,
+  showThemeToggle = true,
 }: {
   locationHook?: BaseLocationHook;
   base?: string;
@@ -65,10 +66,16 @@ export function App({
   logoUrl?: string;
   /** Pre-select an application when the URL doesn't name one (embed hosts). */
   initialApplicationKey?: string;
+  /** Show the system/light/dark switcher. Off when an embedding host owns the theme. */
+  showThemeToggle?: boolean;
 }): React.ReactElement {
   return (
     <Router hook={locationHook ?? useHashLocation} base={base}>
-      <AppShell logoUrl={logoUrl} initialApplicationKey={initialApplicationKey} />
+      <AppShell
+        logoUrl={logoUrl}
+        initialApplicationKey={initialApplicationKey}
+        showThemeToggle={showThemeToggle}
+      />
     </Router>
   );
 }
@@ -76,9 +83,11 @@ export function App({
 function AppShell({
   logoUrl,
   initialApplicationKey,
+  showThemeToggle,
 }: {
   logoUrl?: string;
   initialApplicationKey?: string;
+  showThemeToggle: boolean;
 }) {
   const bootstrap = getBootstrap();
   const toast = useToast();
@@ -210,7 +219,7 @@ function AppShell({
                 Portal
               </span>
             )}
-            <ThemeToggle />
+            {showThemeToggle && <ThemeToggle />}
           </div>
         </div>
 

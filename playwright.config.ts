@@ -3,7 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 const PORT = 3311;
 
 /**
- * Browser e2e for the bundled admin UI. Builds the UI bundle, then boots the
+ * Browser e2e for the bundled admin UI and the React embed. Builds the UI bundle
+ * and the embed (dist/react.js + scoped react.css), then boots the
  * in-memory e2e server (panel + dispatcher + in-process test receiver — see
  * e2e/server.ts) and drives the real SPA.
  *
@@ -21,7 +22,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `bun run build:ui && PORT=${PORT} bun e2e/server.ts`,
+    command: `bun run build:ui && bun run build:react && PORT=${PORT} bun e2e/server.ts`,
     url: `http://localhost:${PORT}/healthcheck`,
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,

@@ -33,8 +33,47 @@ import { App } from "./ui/App.tsx";
 import { ToastProvider } from "./ui/components/Toast.tsx";
 import { setApiBase, setApiToken, type FetchLike } from "./ui/api.ts";
 import { setPortalContainerRef } from "./ui/lib/portal-container.ts";
-import { initTheme } from "./ui/theme.ts";
+import {
+  detectHostTheme,
+  getThemePref,
+  resolveTheme,
+  subscribeSystemTheme,
+  subscribeThemePref,
+  watchHostTheme,
+  type ResolvedTheme,
+} from "./ui/theme.ts";
 import "./ui/styles.css";
+
+/** Theme modes for the embedded components (see {@link WebhooksDashboardProps.theme}). */
+export type EmbedTheme = "auto" | "inherit" | "light" | "dark";
+
+/** Resolve the embed's theme for `mode`, re-rendering when its source changes. */
+function useEmbedTheme(mode: EmbedTheme): ResolvedTheme {
+  const read = React.useCallback((): ResolvedTheme => {
+    if (mode === "light" || mode === "dark") return mode;
+    if (mode === "inherit") return detectHostTheme();
+    return resolveTheme(getThemePref());
+  }, [mode]);
+
+  const [resolved, setResolved] = React.useState<ResolvedTheme>(read);
+
+  React.useEffect(() => {
+    const update = () => setResolved(read());
+    update();
+    if (mode === "inherit") return watchHostTheme(update);
+    if (mode === "auto") {
+      const offPref = subscribeThemePref(update);
+      const offSystem = subscribeSystemTheme(update);
+      return () => {
+        offPref();
+        offSystem();
+      };
+    }
+    return undefined;
+  }, [mode, read]);
+
+  return resolved;
+}
 
 /** Props for {@link WebhooksDashboard}. */
 export interface WebhooksDashboardProps {
@@ -57,8 +96,19 @@ export interface WebhooksDashboardProps {
   fetch?: FetchLike;
   /** Bring your own QueryClient; one is created if omitted. */
   queryClient?: QueryClient;
-  /** Control theme handling. `"auto"` (default) initializes the system/light/dark switcher. */
-  theme?: "auto" | "inherit";
+  /**
+   * Theme handling. The embed never writes to the host document — it resolves a
+   * theme and applies it to its own wrapper (`data-theme`), so surfaces, text,
+   * borders and code views always come from one theme.
+   * - `"auto"` (default) — the panel's own system/light/dark switcher (preference
+   *   persisted in localStorage).
+   * - `"inherit"` — follow the host page, live: a `dark`/`light` class or
+   *   `data-theme` attribute on `<html>` (then `<body>`), falling back to the OS
+   *   `prefers-color-scheme`. The switcher is hidden; the host owns the theme.
+   * - `"light"` / `"dark"` — force one theme (switcher hidden). Useful when the
+   *   host tracks its theme some other way: pass its resolved value.
+   */
+  theme?: EmbedTheme;
   /** Extra className on the dashboard root wrapper. */
   className?: string;
   /**
@@ -119,9 +169,7 @@ export function WebhooksDashboard({
   // Set the API base synchronously so child queries (run on mount) use it.
   setApiBase(apiBaseUrl, { credentials, fetch: fetchImpl });
 
-  React.useEffect(() => {
-    if (theme === "auto") initTheme();
-  }, [theme]);
+  const resolvedTheme = useEmbedTheme(theme);
 
   const client = queryClient ?? getClient();
 
@@ -143,19 +191,22 @@ export function WebhooksDashboard({
 
   return (
     <QueryClientProvider client={client}>
-      <ToastProvider>
-        <div
-          ref={wrapperRef}
-          className={className ? `xtandard-webhooks ${className}` : "xtandard-webhooks"}
-        >
+      {/* Toasts render inside the wrapper so the scoped stylesheet + theme reach them. */}
+      <div
+        ref={wrapperRef}
+        data-theme={resolvedTheme}
+        className={className ? `xtandard-webhooks ${className}` : "xtandard-webhooks"}
+      >
+        <ToastProvider>
           <App
             locationHook={hook}
             base={base}
             logoUrl={logoUrl}
             initialApplicationKey={initialApplicationKey}
+            showThemeToggle={theme === "auto"}
           />
-        </div>
-      </ToastProvider>
+        </ToastProvider>
+      </div>
     </QueryClientProvider>
   );
 }
@@ -180,5 +231,11 @@ export function WebhooksPortal({ token, ...rest }: WebhooksPortalProps): React.R
 }
 
 export { setApiBase, setApiToken, type FetchLike } from "./ui/api.ts";
-export { setThemePref, getThemePref, type ThemePref } from "./ui/theme.ts";
+export {
+  setThemePref,
+  getThemePref,
+  detectHostTheme,
+  type ThemePref,
+  type ResolvedTheme,
+} from "./ui/theme.ts";
 export default WebhooksDashboard;

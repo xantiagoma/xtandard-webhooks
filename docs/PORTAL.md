@@ -52,7 +52,7 @@ React (the flagship path — see `docs/UI.md` for props):
 import { WebhooksPortal } from "@xtandard/webhooks/react";
 import "@xtandard/webhooks/react/styles.css";
 
-<WebhooksPortal baseUrl="/webhooks" token={token} />;
+<WebhooksPortal apiBaseUrl="/webhooks" token={token} />;
 ```
 
 The component sends the token as `Authorization: Bearer` on every API call; the panel answers `/config` with `portal: true` and the UI renders the reduced chrome (endpoints, messages, deliveries — no application switcher, no audit, read-only catalog).

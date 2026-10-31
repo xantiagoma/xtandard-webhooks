@@ -51,6 +51,20 @@ describe("embed CSS scoping", () => {
     expect(out).not.toContain(`${SCOPE} from`);
   });
 
+  it("re-homes theme-qualified tokens and the body surface onto the wrapper", async () => {
+    // Regression: these became `.xtandard-webhooks :root[…]` / `.xtandard-webhooks body`,
+    // which never match — the embed stayed light and inherited the host's text color.
+    const out = await scopeCss(
+      ":root[data-theme=dark]{--background:#000}html[data-theme=dark]{color-scheme:dark}" +
+        "body{background-color:var(--background);color:var(--foreground)}",
+    );
+    expect(out).toContain(`${SCOPE}[data-theme=dark]{--background:#000}`);
+    expect(out).toContain(`${SCOPE}[data-theme=dark]{color-scheme:dark}`);
+    expect(out).toContain(`${SCOPE}{background-color:var(--background)`);
+    expect(out).not.toContain(":root");
+    expect(out).not.toMatch(/ body\b/);
+  });
+
   it("passes the leak guardrail after scoping, and catches an unscoped build", async () => {
     expect(findUnscopedLeaks(await scopeCss(SAMPLE))).toEqual([]);
     // The raw (pre-scope) sample must be flagged — proves the guard has teeth.

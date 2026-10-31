@@ -41,6 +41,14 @@ export async function scopeCss(css: string): Promise<string> {
         // Design tokens live on :root/html — re-home them onto the wrapper so
         // the embed's own scope carries them (the host <html> is untouched).
         if (selector === ":root" || selector === "html" || selector === ":host") return prefix;
+        // Theme-qualified token blocks (`:root[data-theme=dark]`) move onto the
+        // wrapper too — the embed carries its own `data-theme`, never the host's.
+        const rootQualified = /^(?::root|html)(\[.+)$/.exec(selector);
+        if (rootQualified) return `${prefix}${rootQualified[1]}`;
+        // The document surface (background, text color, font) belongs to the
+        // wrapper; `.xtandard-webhooks body` would never match, letting the host's
+        // text color bleed onto the panel's own surfaces.
+        if (selector === "body") return prefix;
         return prefixedSelector;
       },
     }),
