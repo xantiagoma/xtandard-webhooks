@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.1.4
+
+Patch — the embedded React components now render in one theme and follow the host app.
+
+### Fixed
+
+- **`theme="inherit"` in a dark host left the embed light, with mixed themes.** On a host that marks dark mode with `class="dark"` on `<html>`, the panel stayed light and its headings inherited the host's light text color on the panel's white cards. Two scoping bugs in `@xtandard/webhooks/react/styles.css` caused it: the dark tokens were scoped to a selector that could never match, and the panel's own background/text color never applied to its wrapper. Each embed now resolves one theme and applies it to its own wrapper (`data-theme`), so surfaces, text, borders, popups, toasts and code views always come from one theme. The embed never writes to the host document.
+- **`theme="inherit"` now actually follows the host**, live: a `dark`/`light` class or `data-theme` on `<html>` (then `<body>`), falling back to `prefers-color-scheme`. The panel's theme switcher is hidden in this mode, since the host owns the theme.
+- **Toasts in the embed** now render inside the scoped wrapper, so they're styled and themed.
+- **JSON code views** take their syntax and editor colors from the theme tokens, so they're readable in dark mode (embed and standalone SPA).
+- Docs: the embed snippets used a non-existent `baseUrl` prop; it's `apiBaseUrl`.
+
+### Added
+
+- `theme="light"` / `theme="dark"` force a theme on `<WebhooksDashboard>` / `<WebhooksPortal>`. Use it when the host tracks its theme in app state.
+- `detectHostTheme()` and the `EmbedTheme` / `ResolvedTheme` types are exported from `@xtandard/webhooks/react`.
+
+### Changed
+
+- With `theme="auto"`, the embed's switcher now themes only the panel. Previously it also wrote `data-theme` onto the host's `<html>`.
+
 ## v0.1.3
 
 Elysia 2 support.
