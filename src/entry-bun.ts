@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/bun`. Re-exports the Bun adapter so
- * the bundler can map it to its own dist file.
+ * Bun adapter: `webhooksPanel()` returns the web-standard panel handler to
+ * hand to `Bun.serve({ fetch })`, with the core and the dispatcher attached.
  *
- * @module
+ * Import from `@xtandard/webhooks/bun`.
+ *
+ * @module bun
  */
 
 export * from "./adapters/bun.ts";

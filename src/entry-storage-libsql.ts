@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/libsql`. Re-exports the
- * libSQL/Turso storage adapter so the bundler can map it to its own dist file.
+ * libSQL / Turso storage: `createLibsqlStorage()` over `@libsql/client`, for
+ * remote, replicated or embedded SQLite-dialect databases.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/libsql`.
+ *
+ * @module storage/libsql
  */
 
 export * from "./storage/libsql.ts";

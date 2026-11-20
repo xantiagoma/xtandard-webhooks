@@ -1,8 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/auth/none`. Re-exports the anonymous
- * auth provider so the bundler can map it to its own dist file.
+ * No authentication: `noAuth()` treats every request as one anonymous
+ * principal, for embedded use, local development, or a panel behind an
+ * external auth layer. Authorization still runs.
  *
- * @module
+ * Import from `@xtandard/webhooks/auth/none`.
+ *
+ * @module auth/none
  */
 
 export * from "./auth/none.ts";

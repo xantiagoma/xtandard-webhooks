@@ -1,8 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/memory`. Re-exports the
- * in-memory storage adapter so the bundler can map it to its own dist file.
+ * In-memory storage: `createMemoryStorage()`, for tests, development and the
+ * demo. Zero dependencies; implements every optional capability (watch,
+ * compare-and-swap, native delivery-queue claiming).
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/memory`.
+ *
+ * @module storage/memory
  */
 
 export * from "./storage/memory.ts";

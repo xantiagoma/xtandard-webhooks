@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/express`. Re-exports the Express
- * adapter so the bundler can map it to its own dist file.
+ * Express adapter: `webhooksPanel()` bridges Node's `req`/`res` to the
+ * web-standard panel handler. Mount it before any body parser.
  *
- * @module
+ * Import from `@xtandard/webhooks/express`.
+ *
+ * @module express
  */
 
 export * from "./adapters/express.ts";

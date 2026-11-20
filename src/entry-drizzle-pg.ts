@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/drizzle/pg`. Re-exports the Postgres
- * Drizzle table factory so the bundler can map it to its own dist file.
+ * Postgres Drizzle table factory for the webhooks KV store: `pgWebhooksTable()`
+ * puts the table in your Drizzle schema and migrations. Schema-only.
  *
- * @module
+ * Import from `@xtandard/webhooks/drizzle/pg`.
+ *
+ * @module drizzle/pg
  */
 
 export * from "./drizzle/pg.ts";

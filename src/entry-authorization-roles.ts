@@ -1,9 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/authorization/roles`. Re-exports the
- * role-based authorization provider so the bundler can map it to its own dist
- * file.
+ * Role-based authorization: `rolesAuthorization()` maps role names to the
+ * actions they grant (built-in `admin`/`editor`/`viewer` policy by default),
+ * with a `readonly` switch that denies every mutating action.
  *
- * @module
+ * Import from `@xtandard/webhooks/authorization/roles`.
+ *
+ * @module authorization/roles
  */
 
 export * from "./authorization/roles.ts";

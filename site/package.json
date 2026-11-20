@@ -1,0 +1,26 @@
+{
+  "name": "xtandard-webhooks-site",
+  "private": true,
+  "description": "The documentation website (GitHub Pages): Astro Starlight over the repository's Markdown, plus a TypeDoc API reference. Dev tooling only; not part of the published package.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "sync": "bun scripts/sync.ts",
+    "dev": "bun run sync && bun --bun astro dev --port 4323",
+    "build": "bun run sync && bun --bun astro build",
+    "preview": "bun --bun astro preview --port 4323",
+    "check": "bun --bun astro check"
+  },
+  "devDependencies": {
+    "@astrojs/starlight": "0.43.1",
+    "astro": "7.4.13",
+    "astro-mermaid": "2.2.0",
+    "github-slugger": "2.0.0",
+    "mermaid": "11.17.2",
+    "starlight-links-validator": "0.27.0",
+    "starlight-typedoc": "0.23.2",
+    "typedoc": "0.28.20",
+    "typedoc-plugin-markdown": "4.14.1",
+    "typedoc-plugin-missing-exports": "4.1.4"
+  }
+}

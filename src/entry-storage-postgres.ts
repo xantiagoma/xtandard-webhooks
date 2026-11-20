@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/postgres`. Re-exports the
- * Postgres storage adapter so the bundler can map it to its own dist file.
+ * Postgres storage: `createPostgresStorage()` keeps a single `jsonb` key/value
+ * table, created on first use. Works with `pg` or PGlite.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/postgres`.
+ *
+ * @module storage/postgres
  */
 
 export * from "./storage/postgres.ts";

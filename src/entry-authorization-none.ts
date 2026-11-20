@@ -1,9 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/authorization/none`. Re-exports the
- * allow-all authorization provider so the bundler can map it to its own dist
- * file.
+ * No authorization: `noAuthorization()` allows every action. For embedded
+ * use and local development, never for a network-exposed admin surface.
  *
- * @module
+ * Import from `@xtandard/webhooks/authorization/none`.
+ *
+ * @module authorization/none
  */
 
 export * from "./authorization/none.ts";

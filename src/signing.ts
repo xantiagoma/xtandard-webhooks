@@ -15,7 +15,9 @@
  *   rotation); a receiver accepts if **any** matches
  * - `webhook-timestamp` (unix seconds) must be within tolerance, both ways
  *
- * @module
+ * Import from `@xtandard/webhooks/signing` (also re-exported by the root).
+ *
+ * @module signing
  */
 
 import type { WebhookEnvelope } from "./schema.ts";

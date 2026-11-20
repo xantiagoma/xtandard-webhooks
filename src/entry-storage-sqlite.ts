@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/sqlite`. Re-exports the
- * `bun:sqlite` storage adapter so the bundler can map it to its own dist file.
+ * SQLite storage on `bun:sqlite`: `createSqliteStorage()`, for single-node
+ * deployments and local persistence. Bun only.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/sqlite`.
+ *
+ * @module storage/sqlite
  */
 
 export * from "./storage/sqlite.ts";

@@ -1,8 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/drizzle/sqlite`. Re-exports the SQLite
- * Drizzle table factory so the bundler can map it to its own dist file.
+ * SQLite Drizzle table factory for the webhooks KV store:
+ * `sqliteWebhooksTable()` puts the table in your Drizzle schema and
+ * migrations. Schema-only.
  *
- * @module
+ * Import from `@xtandard/webhooks/drizzle/sqlite`.
+ *
+ * @module drizzle/sqlite
  */
 
 export * from "./drizzle/sqlite.ts";

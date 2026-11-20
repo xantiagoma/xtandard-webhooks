@@ -14,7 +14,9 @@
  * the due index live in `queueStorage` (defaults to `storage`) — e.g. control
  * in Postgres, queue in Redis.
  *
- * @module
+ * Import from `@xtandard/webhooks/core` (also re-exported by the root).
+ *
+ * @module core
  */
 
 import { canonicalStringify } from "./canonical.ts";
