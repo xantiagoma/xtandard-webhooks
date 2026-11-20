@@ -33,6 +33,7 @@ Mount it inside your existing app, point it at the database you already run, and
 - [CLI](#cli)
 - [Documentation](#documentation)
 - [Project status](#project-status)
+- [The xtandard ecosystem](#the-xtandard-ecosystem)
 
 ## Why another webhooks tool?
 
@@ -44,7 +45,7 @@ Webhook delivery is a library concern, not a service you rent or a second deploy
 
 And because the wire contract is **Standard Webhooks**, your receivers verify with the official `standardwebhooks` libraries in Python, Go, Ruby, Java, Rust, PHP, or the zero-dependency `@xtandard/webhooks/receiver` — nothing bespoke on their side.
 
-Sibling project: [`@xtandard/flags`](https://github.com/xantiagoma/xtandard-flags) — same architecture, same design system, for feature flags.
+Part of [the xtandard ecosystem](#the-xtandard-ecosystem): its closest sibling, [`@xtandard/flags`](https://github.com/xantiagoma/xtandard-flags), shares the same architecture and design system, for feature flags.
 
 ## How it works — the two planes
 
@@ -312,6 +313,23 @@ See [docs/TESTING.md](docs/TESTING.md).
 ## Project status
 
 ZeroVer (`0.x`) and pre-first-publish: the surface is stabilizing, minor versions may break, and feedback shapes it — issues welcome. Anti-bloat is a core value: when a feature is composable from an existing primitive in ten lines, we document the recipe instead of shipping the subsystem.
+
+## The xtandard ecosystem
+
+`@xtandard/webhooks` is one of a family of open-source, MIT-licensed projects that share the xtandard name. They are independent of each other: use any of them on its own.
+
+| Project                                 | What it is                                                                                                                                                                                                      | Links                                                                                                                                                             |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`@xtandard/webhooks`** (this package) | A self-hosted, embeddable, Standard Webhooks-compliant outbound-webhooks control plane: a Svix alternative as a library                                                                                         | [GitHub](https://github.com/xantiagoma/xtandard-webhooks) · [npm](https://www.npmjs.com/package/@xtandard/webhooks)                                               |
+| **`@xtandard/lib`**                     | Lightweight, type-safe TypeScript utilities with a zero-dependency core                                                                                                                                         | [Docs](https://me.xantiagoma.com/xtandard/) · [GitHub](https://github.com/xantiagoma/xtandard) · [npm](https://www.npmjs.com/package/@xtandard/lib)               |
+| **`@xtandard/flags`**                   | A self-hosted, embeddable, OpenFeature-compatible feature-flag control plane with pluggable storage                                                                                                             | [GitHub](https://github.com/xantiagoma/xtandard-flags) · [npm](https://www.npmjs.com/package/@xtandard/flags)                                                     |
+| **`@xtandard/xyte`**                    | A Zyte API-compatible `/v1/extract` client and server that runs on any proxy provider, or none                                                                                                                  | [Docs](https://me.xantiagoma.com/xyte/) · [GitHub](https://github.com/xantiagoma/xyte) · [npm](https://www.npmjs.com/package/@xtandard/xyte)                      |
+| **xtandard-image**                      | A self-hosted image and video processing server in Go and libvips: imgproxy-compatible URLs plus the imgix, Cloudinary, ImageKit, Cloudflare and Thumbor dialects, with a TypeScript client (`@xtandard/image`) | [Docs](https://me.xantiagoma.com/xtandard-image/) · [GitHub](https://github.com/xantiagoma/xtandard-image) · [npm](https://www.npmjs.com/package/@xtandard/image) |
+
+### Related
+
+- [drizzle-cursor](https://github.com/xantiagoma/drizzle-cursor): cursor-based pagination for Drizzle ORM
+- [drizzle-audit](https://github.com/xantiagoma/drizzle-audit): configurable audit logging for Drizzle ORM
 
 ## License
 
