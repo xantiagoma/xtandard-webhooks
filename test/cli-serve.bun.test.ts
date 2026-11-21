@@ -10,6 +10,7 @@ import { afterAll, expect, test } from "bun:test";
 
 const SERVE_PORT = 4413;
 const DISPATCH_PORT = 4414;
+const OPEN_PORT = 4415;
 const BASE = `http://localhost:${SERVE_PORT}`;
 
 const serveProc = Bun.spawn(["bun", "-e", "import('./src/cli.ts').then((m) => m.run(['serve']))"], {
@@ -41,9 +42,24 @@ const dispatchProc = Bun.spawn(
   },
 );
 
+// Empty AUTH_MODE means the default `none` (not an unknown mode).
+const openProc = Bun.spawn(["bun", "-e", "import('./src/cli.ts').then((m) => m.run(['serve']))"], {
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    PORT: String(OPEN_PORT),
+    AUTH_MODE: "",
+    STORAGE_DRIVER: "memory",
+    DISPATCHER: "0",
+  },
+  stdout: "pipe",
+  stderr: "pipe",
+});
+
 afterAll(() => {
   serveProc.kill();
   dispatchProc.kill();
+  openProc.kill();
 });
 
 async function waitForServer(url: string, timeoutMs = 20_000): Promise<void> {
@@ -93,4 +109,40 @@ test("dispatch (split-worker) serves only the healthcheck", async () => {
 
   // No panel/API in the worker — anything else is a 404.
   expect((await fetch(`${base}/api/applications`)).status).toBe(404);
+});
+
+test("serve exits non-zero on an unknown AUTH_MODE instead of serving an open panel", async () => {
+  const proc = Bun.spawn(
+    [
+      "bun",
+      "-e",
+      "import('./src/cli.ts').then((m) => m.run(['serve'])).then((code) => process.exit(code))",
+    ],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PORT: String(OPEN_PORT + 1),
+        AUTH_MODE: "basci",
+        STORAGE_DRIVER: "memory",
+        DISPATCHER: "0",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  const timeout = setTimeout(() => proc.kill(), 20_000);
+  const code = await proc.exited;
+  clearTimeout(timeout);
+  expect(code).not.toBe(0);
+  expect(await new Response(proc.stderr).text()).toContain(
+    'Unknown AUTH_MODE "basci" (expected none or basic)',
+  );
+  expect(await new Response(proc.stdout).text()).not.toContain("listening");
+});
+
+test("serve with an empty AUTH_MODE defaults to none", async () => {
+  const base = `http://localhost:${OPEN_PORT}`;
+  await waitForServer(`${base}/healthcheck`);
+  expect((await fetch(`${base}/api/applications`)).status).toBe(200);
 });
