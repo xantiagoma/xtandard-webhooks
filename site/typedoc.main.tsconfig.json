@@ -1,0 +1,7 @@
+{
+  // Every entry point under src/ except the Elysia 2 adapter (typedoc.elysia2.tsconfig.json).
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "composite": true },
+  "include": ["../src/**/*.ts", "../src/**/*.tsx", "../scripts/vendor.d.ts"],
+  "exclude": ["../dist", "../node_modules", "../src/adapters/elysia2.ts", "../src/entry-elysia2.ts"]
+}

@@ -1,0 +1,12 @@
+{
+  // The program(s) the API reference (starlight-typedoc) reads. Solution-style: TypeDoc builds
+  // one program per reference and documents each entry point from the program that holds it —
+  // every entry point under src/ against Elysia 1, and the Elysia 2 adapter against Elysia 2.
+  // Type errors are not checked here (skipErrorChecking in astro.config.ts): `bun run typecheck`
+  // at the root does that.
+  "files": [],
+  "references": [
+    { "path": "./typedoc.main.tsconfig.json" },
+    { "path": "./typedoc.elysia2.tsconfig.json" }
+  ]
+}

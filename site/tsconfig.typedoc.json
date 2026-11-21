@@ -1,9 +1,0 @@
-{
-  // The program TypeDoc reads for the API reference: the library's own settings, over every file
-  // in src/ — including the Elysia 2 adapter, which the root tsconfig.json leaves to
-  // tsconfig.elysia2.json. Type errors are not checked here (skipErrorChecking in astro.config.ts):
-  // `bun run typecheck` at the root does that.
-  "extends": "../tsconfig.json",
-  "include": ["../src/**/*.ts", "../src/**/*.tsx", "../scripts/vendor.d.ts"],
-  "exclude": ["../dist", "../node_modules"]
-}

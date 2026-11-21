@@ -21,6 +21,7 @@
     "starlight-typedoc": "0.23.2",
     "typedoc": "0.28.20",
     "typedoc-plugin-markdown": "4.14.1",
-    "typedoc-plugin-missing-exports": "4.1.4"
+    "typedoc-plugin-missing-exports": "4.1.4",
+    "typescript": "6.0.3"
   }
 }
