@@ -66,7 +66,7 @@ Served by every adapter at the mount point; no React required in the host. Views
 | Deliveries  | the operational heart: All/Pending/Succeeded/Dead-letter tabs, endpoint filter, attempt timeline (status, duration, truncated response body, trigger), Retry, and a **Request** inspector showing the exact signed request sent (headers incl. `webhook-signature`, body) with Copy-as-curl |
 | Audit       | who did what, when                                                                                                                                                                                                                                                                          |
 
-The application switcher lives in the shell (`?app=` in the URL). Portal mode (a request authenticated by a `whpt_` token, or `?token=whpt_…` on the SPA URL) renders the reduced chrome from the same bundle.
+The application switcher lives in the shell (`?app=` in the URL). Portal mode (a request authenticated by a `whpt_` token, or `#token=whpt_…` / `?token=whpt_…` on the SPA URL, which the SPA removes from the address bar) renders the reduced chrome from the same bundle.
 
 ## Design system
 
