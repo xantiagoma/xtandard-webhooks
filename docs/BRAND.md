@@ -109,10 +109,11 @@ and continues along its diagonal as the hook: a 44-unit round-capped stem, 74 un
 icon the mark is scaled by 0.86 and centred; the tile's corner radius is 224 (21.9%).
 
 In the horizontal lockups (and the monochrome ones), the symbol is **vertically centred on the
-wordmark**: the centre of its ink (the hook's eye down to the X's base) sits on the middle of the
-wordmark's ink, from the baseline up to the ascenders (`xtandard-…` has no descenders), with a
-26-unit gap. `scripts/brand-svg.ts` measures the ascenders with HarfBuzz, so the rule holds for any
-product name.
+wordmark**, by the rule every xtandard repository shares: the symbol's vertical centre (its full
+bounds) sits on the wordmark's optical centre, `baseline − capHeight / 2`. Urbanist's cap height is
+0.7 em (OS/2 `sCapHeight`), 35 units above the baseline for the 100-unit wordmark; descenders are
+ignored. The symbol keeps its size and the 26-unit gap, and the canvas is as tall as the symbol or
+the descender, whichever reaches further.
 
 **Clear space**: the eye's diameter on every side of the mark or a lockup. **Minimum sizes**: app
 icon 16 px (use the favicon set below 48 px), horizontal lockup 24 px high, stacked lockup 48 px high.
