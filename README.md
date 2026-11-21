@@ -1,8 +1,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/lockup-horizontal-dark.png" />
-  <img src="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/lockup-horizontal-light.png" alt="xtandard-webhooks" width="420" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/lockup-horizontal-dark.svg" />
+  <img src="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/lockup-horizontal-light.svg" alt="xtandard-webhooks" width="420" />
 </picture>
 
 # @xtandard/webhooks
