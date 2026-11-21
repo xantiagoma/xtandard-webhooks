@@ -727,4 +727,5 @@ export async function run(argv: string[]): Promise<number> {
 
 // Run only when executed directly (`bun src/cli.ts`), not when imported by the
 // bin shim, the standalone app or a test.
-if (isMainModule(import.meta)) void run(process.argv.slice(2)).then((code) => process.exit(code));
+if (isMainModule({ url: import.meta.url }))
+  void run(process.argv.slice(2)).then((code) => process.exit(code));
