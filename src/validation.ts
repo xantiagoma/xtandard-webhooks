@@ -9,34 +9,20 @@
  * @module
  */
 
-import { assertValid, issuesFrom, jsonValueSchema, ValidationError } from "@xtandard/kit/util";
+import {
+  assertValid,
+  issuesFrom,
+  jsonValueSchema,
+  KEY_SEGMENT_REGEX,
+  ValidationError,
+} from "@xtandard/kit/util";
 import type { ValidationIssue, ValidationResult } from "@xtandard/kit/util";
 import * as v from "valibot";
 import { RESERVED_APPLICATION_KEYS } from "./keys.ts";
 import type { Application, Endpoint } from "./schema.ts";
 
 /** Allowed characters for application keys and event type names. */
-export const KEY_REGEX = /^[a-zA-Z0-9._-]+$/;
-
-/**
- * Validate a caller-supplied string that becomes a **storage key segment**
- * (e.g. an idempotency key). Rejects anything that could escape its namespace
- * or traverse the filesystem on the file adapter: characters outside
- * {@link KEY_REGEX}, and the dot-only segments `.` / `..`. Returns the issue
- * list (empty when safe) so callers can fold it into a {@link ValidationError}.
- */
-export function validateKeySegment(value: string, path: string): ValidationIssue[] {
-  if (!KEY_REGEX.test(value)) {
-    return [{ path, message: `must match ${KEY_REGEX} (no slashes or path separators)` }];
-  }
-  if (/^\.+$/.test(value)) {
-    return [{ path, message: `"${value}" is not an allowed key` }];
-  }
-  if (value.length > 256) {
-    return [{ path, message: "must be at most 256 characters" }];
-  }
-  return [];
-}
+export const KEY_REGEX: RegExp = KEY_SEGMENT_REGEX;
 
 /**
  * Header names owned by the Standard Webhooks wire contract. Endpoints may not
