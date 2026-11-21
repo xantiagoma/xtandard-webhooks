@@ -208,52 +208,31 @@ const wordGradient = (light: boolean) =>
   `<linearGradient id="word" x1="0" y1="-60" x2="0" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="${light ? "#84CC16" : LIME_HI}"/><stop offset="1" stop-color="${light ? LIME_TEXT_LIGHT : LIME}"/></linearGradient>`;
 
 /**
- * The wordmark's ink height above the baseline at size 100 (the ascenders / cap height of
- * `xtandard-…`; the wordmark has no descenders), from HarfBuzz's glyph extents.
+ * Urbanist's cap height at 100 units (OS/2 sCapHeight 0.7). The horizontal lockup centres the
+ * symbol on the wordmark's optical centre, half the cap height above the baseline (descenders
+ * ignored); the family uses the same rule in every repository.
  */
-function inkAscent(text: string, size: number): number {
-  const r = Bun.spawnSync([
-    "hb-shape",
-    `--font-file=${FONT}`,
-    "--variations=wght=900",
-    `--font-size=${size}`,
-    "--show-extents",
-    "--no-glyph-names",
-    "--no-clusters",
-    "--no-advances",
-    "--no-positions",
-    text,
-  ]);
-  if (r.exitCode !== 0) throw new Error(r.stderr.toString());
-  const bearings = [...r.stdout.toString().matchAll(/<-?\d+,(-?\d+),/g)].map((m) => Number(m[1]));
-  return Math.max(...bearings);
-}
-const WORD_ASCENT = inkAscent("xtandard-webhooks", 100);
-
-/** The symbol's ink, top to bottom, in the 1024 grid: the hook's eye down to the X's base. */
-const SYMBOL_INK = { top: EY - EYE_R - EYE_W / 2, bottom: 724 };
+const CAP_HEIGHT = 70;
+/** How far the wordmark's ink reaches below the baseline (`xtandard-webhooks` has no descenders). */
+const DESCENT = 2;
 
 function horizontal(mode: "dark" | "light" | "white" | "black"): string {
   const mono = mode === "white" ? "#FFFFFF" : mode === "black" ? "#000000" : undefined;
-  const symH = 150; // mark height in lockup units (as before; MARK includes 20 units of air)
+  const symH = 150; // mark height in lockup units
   const s = symH / MARK.h;
   const symW = MARK.w * s;
   const gap = 26;
-  // Vertical centring: the symbol's ink centre sits on the wordmark's optical centre, the middle
-  // of its ink from the baseline to the ascenders (no descenders). Coordinates relative to the
-  // baseline (y = 0), then shifted so the taller of the two starts 4 units from the top.
-  const symInkH = (SYMBOL_INK.bottom - SYMBOL_INK.top) * s;
-  const symTop = -WORD_ASCENT / 2 - symInkH / 2;
-  const top = Math.min(symTop, -WORD_ASCENT);
-  const bottom = Math.max(symTop + symInkH, 2);
-  const baseline = 4 - top;
+  // The symbol's vertical centre (its full bounds) on the wordmark's optical centre: the middle
+  // of the cap height above the baseline.
+  const baseline = 4 + symH / 2 + CAP_HEIGHT / 2;
   const prefixFill = mono ?? (mode === "dark" ? PAPER : INK);
   const nameFill = mono ?? "url(#word)";
   const w = symW + gap + PREFIX.width + NAME.width + 4;
-  const h = bottom - top + 8;
+  // The descender (baseline + DESCENT) stays inside the canvas.
+  const h = Math.max(symH + 8, baseline + DESCENT + 4);
   const label = mono ? `xtandard-webhooks (${mode})` : "xtandard-webhooks";
   return `${header(w, h, label)}<defs>${limeGradient("lime", mode === "light")}${wordGradient(mode === "light")}</defs>
-<g transform="translate(0 ${f(baseline + symTop)}) scale(${s.toFixed(5)}) translate(${-MARK.x} ${f(-SYMBOL_INK.top)})">${symbolBody({ brackets: false, ...(mono ? { mono } : {}) })}</g>
+<g transform="translate(0 4) scale(${s.toFixed(5)}) translate(${-MARK.x} ${f(-MARK.y)})">${symbolBody({ brackets: false, ...(mono ? { mono } : {}) })}</g>
 <g transform="translate(${f(symW + gap)} ${f(baseline)})" fill="${prefixFill}">${PREFIX.body}</g>
 <g transform="translate(${f(symW + gap + PREFIX.width)} ${f(baseline)})" fill="${nameFill}">${NAME.body}</g>
 </svg>`;
