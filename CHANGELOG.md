@@ -9,7 +9,7 @@
 ### Changed
 
 - `ElysiaWebhooksHandler` is now an interface with documented members (a call signature, `core`, `dispatcher`, `openapi()`); the type itself is unchanged.
-- Docs: the `/elysia2` API reference is generated against Elysia 2 and lists every symbol it exports, including the ones it shares with `/elysia`.
+- Docs: the `/elysia2` API reference is generated against Elysia 2, and each module page lists the symbols it re-exports (e.g. `webhooksPanel` on `/elysia2`) with a link to where they are documented.
 
 ## v0.1.4
 

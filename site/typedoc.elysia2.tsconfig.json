@@ -1,0 +1,11 @@
+{
+  // The `@xtandard/webhooks/elysia2` entry point, with `elysia` resolved to Elysia 2 (the
+  // `elysia-v2` devDep alias), as ../tsconfig.elysia2.json type-checks it.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "paths": { "elysia": ["../node_modules/elysia-v2"] }
+  },
+  "include": ["../src/entry-elysia2.ts", "../scripts/vendor.d.ts"],
+  "exclude": ["../dist", "../node_modules"]
+}

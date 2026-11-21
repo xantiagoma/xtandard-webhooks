@@ -3,10 +3,11 @@
 // description) and /api/<module>/ (that entry point's members, grouped by kind, with summaries).
 // The description is the `@module` doc comment at the top of each entry file (src/index.ts,
 // src/core.ts, src/entry-*.ts…), so it is written once, next to the code.
-import { existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { HookParameters, StarlightPlugin } from "@astrojs/starlight/types";
+import type { StarlightPlugin } from "@astrojs/starlight/types";
 import { entries, packageName, repoRoot, repoUrl, rootModule, siteBase } from "../manifest.ts";
+import { reexportsFile, type Reexport } from "./typedoc-plugin.ts";
 
 const kinds = [
   ["functions", "Functions"],
@@ -127,7 +128,7 @@ const firstSentence = (s: string) => {
   return m ? m[1]! : flat;
 };
 
-function modulePage(m: Module): string {
+function modulePage(m: Module, reexports: Reexport[]): string {
   const out = [
     "---",
     `title: ${yaml(m.importPath)}`,
@@ -144,12 +145,47 @@ function modulePage(m: Module): string {
     "```",
     "",
   ];
+  // A symbol several entry points export is documented once, under the first (astro.config.ts
+  // apiOwners); say which other entry points this one re-exports from (`export … from "./x"`).
+  const from = m.source
+    ? new Set(
+        [
+          ...readFileSync(join(repoRoot, m.source), "utf8").matchAll(
+            /\bexport\s+(?:type\s+)?(?:\*|\{[^}]*\})\s+from\s+"\.\/([^"]+)"/g,
+          ),
+        ].map((x) => `src/${x[1]}`),
+      )
+    : new Set<string>();
+  const others = entries().filter((e) => e.source !== m.source && from.has(e.source));
+  if (others.length)
+    out.push(
+      `Also re-exports symbols of ${others
+        .map((e) => `[\`${e.importPath}\`](${siteBase}/api/${e.module}/)`)
+        .join(", ")}, documented on those pages.`,
+      "",
+    );
   for (const [kind, label] of kinds) {
     const list = m.members.get(kind);
     if (!list) continue;
     out.push(`## ${label}`, "", "| Name | Summary |", "| --- | --- |");
     for (const x of list)
       out.push(`| [\`${x.name}\`](${x.route}) | ${x.summary.replaceAll("|", "\\|")} |`);
+    out.push("");
+  }
+  // Re-exports of symbols documented on another module page the sentence above doesn't name
+  // (e.g. the Elysia 2 adapter's `webhooksPanel`, shared with and documented under the Elysia 1 one).
+  const covered = new Set(others.map((e) => e.module));
+  const listed = reexports
+    .filter((r) => r.module === m.name && !covered.has(r.owner))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (listed.length) {
+    out.push("## Re-exports", "", "| Name | Documented on |", "| --- | --- |");
+    for (const r of listed) {
+      const owner = entries().find((e) => e.module === r.owner)?.importPath ?? r.owner;
+      const route = `${siteBase}/api/${r.owner}/${r.kind}/${r.target}/`.toLowerCase();
+      const label = r.name === r.target ? `\`${r.name}\`` : `\`${r.name}\` (\`${r.target}\`)`;
+      out.push(`| [${label}](${route}) | [\`${owner}\`](${siteBase}/api/${r.owner}/) |`);
+    }
     out.push("");
   }
   return out.join("\n");
@@ -169,7 +205,7 @@ function indexPage(modules: Module[]): string {
     "types. Each entry point is a separate import; storage adapters, framework adapters and the React",
     "embeds have **optional peer dependencies**, installed only when you use them. A symbol that",
     "several entry points export (the root re-exports `/core`, `/schema` and `/signing`) is documented",
-    "once, under the entry point it comes from; `/elysia2` lists its whole surface, built against Elysia 2.",
+    "once, under the entry point it comes from; the others link to it (a module page's _Re-exports_).",
     `See also [Subpath exports](${siteBase}/guides/subpath-exports/).`,
     "",
     "| Import | Exports | Description |",
@@ -185,68 +221,23 @@ function indexPage(modules: Module[]): string {
   return out.join("\n");
 }
 
-/** An entry point TypeDoc documented in a program of its own, under content/docs/<output>/. */
-export type SeparateApi = { module: string; output: string };
-
-type Sidebar = NonNullable<HookParameters<"config:setup">["config"]["sidebar"]>;
-type SidebarItem = Sidebar[number];
-const isGroup = (i: SidebarItem): i is Extract<SidebarItem, { items: unknown }> =>
-  typeof i === "object" && "items" in i;
-
-/** Every Markdown file under `dir`. */
-const markdownFiles = (dir: string): string[] =>
-  readdirSync(dir, { withFileTypes: true, recursive: true })
-    .filter((e) => e.isFile() && e.name.endsWith(".md"))
-    .map((e) => join(e.parentPath, e.name));
-
-/**
- * Move a separately generated entry point to /api/<module>/, where the main program would have put
- * it: its pages, the links between them, and its sidebar group (into the API reference group,
- * after the module it sorts after).
- */
-function relocate(docsDir: string, api: SeparateApi, sidebar: Sidebar): Sidebar {
-  const from = join(docsDir, api.output);
-  const to = join(docsDir, "api", api.module);
-  rmSync(to, { recursive: true, force: true });
-  renameSync(from, to);
-  rmSync(join(to, "README.md"), { force: true });
-  const rewrite = (text: string) =>
-    text.replaceAll(`${siteBase}/${api.output}/`, `${siteBase}/api/${api.module}/`);
-  for (const file of markdownFiles(to)) writeFileSync(file, rewrite(readFileSync(file, "utf8")));
-
-  const group = sidebar.find((i) => isGroup(i) && i.label === api.module);
-  if (!group) return sidebar;
-  const moved = JSON.parse(
-    JSON.stringify(group).replaceAll(`${api.output}/`, `api/${api.module}/`),
-  ) as SidebarItem;
-  return sidebar
-    .filter((i) => i !== group)
-    .map((i) => {
-      if (!isGroup(i) || i.label !== "API reference") return i;
-      const items = [...i.items];
-      const at = items.findIndex((m) => isGroup(m) && m.label.localeCompare(api.module) > 0);
-      items.splice(at < 0 ? items.length : at, 0, moved);
-      return { ...i, items };
-    });
-}
-
-export function apiOverviews(separate: SeparateApi[] = []): StarlightPlugin {
+export function apiOverviews(): StarlightPlugin {
   return {
     name: "xtandard-webhooks-api-overviews",
     hooks: {
-      "config:setup"({ astroConfig, command, config, logger, updateConfig }) {
+      "config:setup"({ astroConfig, command, logger }) {
         if (command === "preview") return;
-        const docsDir = join(new URL(astroConfig.srcDir).pathname, "content/docs");
-        const apiDir = join(docsDir, "api");
+        const apiDir = join(new URL(astroConfig.srcDir).pathname, "content/docs/api");
         if (!existsSync(apiDir)) {
           logger.warn("no generated API reference to index");
           return;
         }
-        let sidebar = config.sidebar ?? [];
-        for (const api of separate) sidebar = relocate(docsDir, api, sidebar);
-        updateConfig({ sidebar });
         const modules = collect(apiDir);
-        for (const m of modules) writeFileSync(join(apiDir, m.name, "index.md"), modulePage(m));
+        const reexports: Reexport[] = existsSync(reexportsFile)
+          ? JSON.parse(readFileSync(reexportsFile, "utf8"))
+          : [];
+        for (const m of modules)
+          writeFileSync(join(apiDir, m.name, "index.md"), modulePage(m, reexports));
         writeFileSync(join(apiDir, "index.md"), indexPage(modules));
         // The generator's own root listing links to module pages it never emits; index.md replaces it.
         rmSync(join(apiDir, "README.md"), { force: true });
