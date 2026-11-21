@@ -23,7 +23,7 @@ import {
   serve,
   startServer,
   storageFromEnv,
-  type StorageRegistry,
+  storageRegistryFrom,
   type StorageRole,
 } from "@xtandard/kit/cli";
 import { WEBHOOKS_ACTIONS, type WebhooksAction } from "./authorization/contract.ts";
@@ -66,42 +66,20 @@ const storageRole = (role: Role): StorageRole => {
 };
 
 /**
- * The webhooks storage factories, so every CLI store carries the product
- * defaults (the `xtandard_webhooks` sqlite/libsql table) and capabilities
- * (`claimDue` on memory and redis). Each driver module loads on first use.
+ * The webhooks storage entries, so every CLI store carries the product defaults
+ * (the `xtandard_webhooks` sqlite/libsql table) and capabilities (`claimDue` on
+ * memory and redis), with the kit's env → options mapping. Each driver module
+ * loads on first use; the sqlite one needs the Bun runtime (`bunx xtandard-webhooks …`).
  */
-const STORAGE_DRIVERS: StorageRegistry<WebhooksStorage> = {
-  memory: async () => (await import("./storage/memory.ts")).createMemoryStorage(),
-  file: async (c) => (await import("./storage/file.ts")).createFileStorage({ dir: c.fileDir! }),
-  redis: async (c) =>
-    (await import("./storage/redis.ts")).createRedisStorage({
-      url: c.redisUrl,
-      ...(c.prefix ? { prefix: c.prefix } : {}),
-    }),
-  postgres: async (c) =>
-    (await import("./storage/postgres.ts")).createPostgresStorage({
-      connectionString: c.postgresUrl,
-      ...(c.pgTable ? { table: c.pgTable } : {}),
-    }),
-  mongodb: async (c) =>
-    (await import("./storage/mongodb.ts")).createMongoStorage({
-      url: c.mongoUrl,
-      ...(c.mongoDb ? { dbName: c.mongoDb } : {}),
-      ...(c.mongoCollection ? { collectionName: c.mongoCollection } : {}),
-    }),
-  // Requires running the CLI under Bun (`bunx xtandard-webhooks …`).
-  sqlite: async (c) =>
-    (await import("./storage/sqlite.ts")).createSqliteStorage({
-      ...(c.sqlitePath ? { path: c.sqlitePath } : {}),
-      ...(c.sqliteTable ? { table: c.sqliteTable } : {}),
-    }),
-  libsql: async (c) =>
-    (await import("./storage/libsql.ts")).createLibsqlStorage({
-      ...(c.libsqlUrl ? { url: c.libsqlUrl } : {}),
-      ...(c.libsqlAuthToken ? { authToken: c.libsqlAuthToken } : {}),
-      ...(c.sqliteTable ? { table: c.sqliteTable } : {}),
-    }),
-};
+const STORAGE_DRIVERS = storageRegistryFrom({
+  memory: () => import("./storage/memory.ts"),
+  file: () => import("./storage/file.ts"),
+  redis: () => import("./storage/redis.ts"),
+  postgres: () => import("./storage/postgres.ts"),
+  mongodb: () => import("./storage/mongodb.ts"),
+  sqlite: () => import("./storage/sqlite.ts"),
+  libsql: () => import("./storage/libsql.ts"),
+});
 
 /**
  * Parse a duration env like `"30d"`, `"34h"`, `"90m"`, `"10s"` into a
@@ -178,7 +156,11 @@ function dispatcherEnabled(): boolean {
  * {@link buildQueueStorage}).
  */
 async function buildStorage(role: Role): Promise<WebhooksStorage> {
-  return storageFromEnv({ role: storageRole(role), drivers: STORAGE_DRIVERS, allowed: DRIVERS });
+  return (await storageFromEnv({
+    role: storageRole(role),
+    drivers: STORAGE_DRIVERS,
+    allowed: DRIVERS,
+  })) as WebhooksStorage;
 }
 
 /**
