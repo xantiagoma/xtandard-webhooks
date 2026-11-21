@@ -40,7 +40,7 @@ createRoot(root).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <App locationHook={useBrowserLocation} base={basePath} />
+        <App locationHook={useBrowserLocation} base={basePath} showBrandMark />
       </ToastProvider>
     </QueryClientProvider>
   </React.StrictMode>,

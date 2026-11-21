@@ -17,6 +17,8 @@
 
 ### Changed
 
+- Brand: a generated vector kit in the xtandard family style (`docs/BRAND.md`, `scripts/brand-assets.sh`): app icon, symbol, light/dark lockups, favicons and a social card. The README header, the docs site (logo, favicons, `og:image`) and the standalone admin UI (favicon; the mark before the default title) use it. `logo.png`, `logo-128.png`, `logo-256.png` and `favicon.png` keep their names.
+
 - `ElysiaWebhooksHandler` is now an interface with documented members (a call signature, `core`, `dispatcher`, `openapi()`); the type itself is unchanged.
 - Docs: the `/elysia2` API reference is generated against Elysia 2, and each module page lists the symbols it re-exports (e.g. `webhooksPanel` on `/elysia2`) with a link to where they are documented.
 
