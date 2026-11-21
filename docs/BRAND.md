@@ -108,6 +108,12 @@ and continues along its diagonal as the hook: a 44-unit round-capped stem, 74 un
 26-unit barb across it, ending in the eye, a ring of radius 58 with a 34-unit stroke. In the app
 icon the mark is scaled by 0.86 and centred; the tile's corner radius is 224 (21.9%).
 
+In the horizontal lockups (and the monochrome ones), the symbol is **vertically centred on the
+wordmark**: the centre of its ink (the hook's eye down to the X's base) sits on the middle of the
+wordmark's ink, from the baseline up to the ascenders (`xtandard-…` has no descenders), with a
+26-unit gap. `scripts/brand-svg.ts` measures the ascenders with HarfBuzz, so the rule holds for any
+product name.
+
 **Clear space**: the eye's diameter on every side of the mark or a lockup. **Minimum sizes**: app
 icon 16 px (use the favicon set below 48 px), horizontal lockup 24 px high, stacked lockup 48 px high.
 
