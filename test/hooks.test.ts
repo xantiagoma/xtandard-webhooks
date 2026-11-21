@@ -1,13 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   defaultHookErrorReporter,
-  HookDeniedError,
-  normalizeHooks,
-  runAfter,
-  runBefore,
   type AfterEvent,
   type BeforeEvent,
-  type WebhooksHooks,
 } from "../src/hooks/contract.ts";
 import { createLogHook } from "../src/hooks/log.ts";
 
@@ -22,76 +17,14 @@ const afterEvent: AfterEvent = {
   at: "2026-07-04T12:00:00.000Z",
 };
 
-describe("normalizeHooks", () => {
-  it("handles undefined, single, and array inputs", () => {
-    expect(normalizeHooks(undefined)).toEqual([]);
-    const hook: WebhooksHooks = { after: () => {} };
-    expect(normalizeHooks(hook)).toEqual([hook]);
-    expect(normalizeHooks([hook, hook])).toEqual([hook, hook]);
-  });
-});
-
-describe("runBefore", () => {
-  it("runs sequentially and stops at the first throw", async () => {
-    const calls: number[] = [];
-    const hooks: WebhooksHooks[] = [
-      { before: () => void calls.push(1) },
-      {
-        before: () => {
-          calls.push(2);
-          throw new HookDeniedError("no");
-        },
-      },
-      { before: () => void calls.push(3) },
-    ];
-    await expect(runBefore(hooks, beforeEvent)).rejects.toThrow("no");
-    expect(calls).toEqual([1, 2]);
-  });
-});
-
-describe("runAfter", () => {
-  it("isolates failures and still runs the rest", async () => {
-    const calls: string[] = [];
-    const errors: unknown[] = [];
-    const hooks: WebhooksHooks[] = [
-      {
-        after: () => {
-          throw new Error("boom");
-        },
-      },
-      { after: () => void calls.push("ok") },
-    ];
-    await runAfter(hooks, afterEvent, (error) => void errors.push(error));
-    expect(calls).toEqual(["ok"]);
-    expect(errors).toHaveLength(1);
-  });
-
-  it("defaultHookErrorReporter never throws", () => {
+describe("defaultHookErrorReporter", () => {
+  it("warns with the [@xtandard/webhooks] prefix and never throws", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(() => defaultHookErrorReporter(new Error("x"), afterEvent)).not.toThrow();
-  });
-});
-
-describe("HookDeniedError", () => {
-  it("carries a status and sets name for cross-bundle detection", () => {
-    const err = new HookDeniedError("frozen", { status: 429 });
-    expect(err.status).toBe(429);
-    expect(err.name).toBe("HookDeniedError");
-    expect(new HookDeniedError("x").status).toBe(403);
-  });
-
-  it("is detectable by err.name even when instanceof fails (re-imported copy)", () => {
-    // Simulate the dual-bundle case: a structurally identical error class from
-    // "another copy" of the package. Routes must fall back to `err.name`.
-    class ForeignHookDeniedError extends Error {
-      readonly status = 403;
-      constructor(message: string) {
-        super(message);
-        this.name = "HookDeniedError";
-      }
-    }
-    const foreign: unknown = new ForeignHookDeniedError("denied elsewhere");
-    expect(foreign instanceof HookDeniedError).toBe(false);
-    expect((foreign as Error).name).toBe("HookDeniedError");
+    expect(warn.mock.calls[0]?.[0]).toBe(
+      '[@xtandard/webhooks] after-hook for "application.created" threw:',
+    );
+    warn.mockRestore();
   });
 });
 

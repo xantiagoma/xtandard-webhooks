@@ -34,6 +34,12 @@ import type {
   JsonValue,
   Message,
 } from "../schema.ts";
+import {
+  createHookErrorReporter,
+  type HookErrorReporter as KitHookErrorReporter,
+  type Hooks,
+  type HooksInput,
+} from "@xtandard/kit/hooks";
 
 /**
  * Event delivered to {@link WebhooksHooks.before} — the *proposed* mutation,
@@ -149,98 +155,21 @@ export type AfterEvent =
 export type BeforeEventType = BeforeEvent["type"];
 export type AfterEventType = AfterEvent["type"];
 
-/**
- * Thrown from a {@link WebhooksHooks.before} handler to **deny** a mutation with
- * a clean HTTP status (default `403`). Any thrown error denies the mutation,
- * but a plain `Error` maps to `500` at the API layer (treated as an unexpected
- * bug); throw this to signal a deliberate policy rejection (`403`, or a custom
- * `status` such as `409`/`422`).
- *
- * @example
- * ```ts
- * before(event) {
- *   if (event.type === "message.publish" && overQuota(event.applicationKey)) {
- *     throw new HookDeniedError("Monthly webhook quota exceeded.", { status: 429 });
- *   }
- * }
- * ```
- */
-export class HookDeniedError extends Error {
-  /** HTTP status the API layer should respond with. Default `403`. */
-  readonly status: number;
-  constructor(message: string, options?: { status?: number; cause?: unknown }) {
-    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
-    this.name = "HookDeniedError";
-    this.status = options?.status ?? 403;
-  }
-}
+export { HookDeniedError, normalizeHooks, runAfter, runBefore } from "@xtandard/kit/hooks";
 
 /**
- * A control-plane hook. Implement `before`, `after`, or both. Pass one — or an
- * array — to {@link ../core.createWebhooksCore} via `hooks`.
+ * Lifecycle hooks: `before` may deny a mutation by throwing (sequential, the
+ * first throw aborts); `after` observes committed changes (concurrent, errors
+ * isolated and reported).
  */
-export interface WebhooksHooks {
-  /**
-   * Runs before a mutation commits. **Throw to deny** (the error propagates to
-   * the caller; its message is the reason). Return/resolve to allow. Must not
-   * mutate the event payload.
-   */
-  before?(event: BeforeEvent): void | Promise<void>;
-  /**
-   * Runs after a mutation commits. For side effects only. Errors are isolated
-   * and reported via `onHookError` — they never fail the (already committed)
-   * operation.
-   */
-  after?(event: AfterEvent): void | Promise<void>;
-}
+export type WebhooksHooks = Hooks<BeforeEvent, AfterEvent>;
 
-/** Accepts a single hook, an array, or nothing. */
-export type WebhooksHooksInput = WebhooksHooks | readonly WebhooksHooks[] | undefined;
+/** One hook object, an array of them, or nothing (as `hooks` options accept). */
+export type WebhooksHooksInput = HooksInput<BeforeEvent, AfterEvent>;
 
-/** Reports an error thrown by an `after` hook. */
-export type HookErrorReporter = (error: unknown, event: AfterEvent) => void;
+/** Receives an error thrown by an `after` hook, with the event it was handling. */
+export type HookErrorReporter = KitHookErrorReporter<AfterEvent>;
 
-/** Normalize the `hooks` option into a flat array (empty when unset). */
-export function normalizeHooks(input: WebhooksHooksInput): WebhooksHooks[] {
-  if (!input) return [];
-  return Array.isArray(input) ? [...input] : [input as WebhooksHooks];
-}
-
-/**
- * Run every `before` hook sequentially, in order. The first hook to throw
- * aborts: the error propagates to the caller (denying the mutation) and no
- * later hook runs. A no-op when there are no `before` hooks.
- */
-export async function runBefore(hooks: WebhooksHooks[], event: BeforeEvent): Promise<void> {
-  for (const hook of hooks) {
-    if (hook.before) await hook.before(event);
-  }
-}
-
-/**
- * Run every `after` hook, isolating failures. The mutation has already
- * committed, so a throwing hook must not fail the operation — its error is
- * routed to `onError` and swallowed. Remaining hooks still run.
- */
-export async function runAfter(
-  hooks: WebhooksHooks[],
-  event: AfterEvent,
-  onError: HookErrorReporter,
-): Promise<void> {
-  await Promise.all(
-    hooks.map(async (hook) => {
-      if (!hook.after) return;
-      try {
-        await hook.after(event);
-      } catch (error) {
-        onError(error, event);
-      }
-    }),
-  );
-}
-
-/** Default `after`-hook error reporter: warn, but never throw. */
-export const defaultHookErrorReporter: HookErrorReporter = (error, event) => {
-  // eslint-disable-next-line no-console
-  console.warn(`[@xtandard/webhooks] after-hook for "${event.type}" threw:`, error);
-};
+/** The default reporter: `console.warn` with the `[@xtandard/webhooks]` prefix. */
+export const defaultHookErrorReporter: HookErrorReporter =
+  createHookErrorReporter("@xtandard/webhooks");

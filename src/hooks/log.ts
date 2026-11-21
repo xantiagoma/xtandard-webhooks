@@ -16,40 +16,21 @@
  * @module
  */
 
+import * as kit from "@xtandard/kit/hooks/log";
 import type { AfterEvent, BeforeEvent, WebhooksHooks } from "./contract.ts";
 
-/** Options for {@link createLogHook}. */
-export interface LogHookOptions {
-  /** Sink for each formatted line. Default: `console.log`. */
-  log?: (line: string) => void;
-  /** Also log `before` events (default `false` — `after` only). */
-  includeBefore?: boolean;
-  /**
-   * Format a line for an event. Default: a compact
-   * `[@xtandard/webhooks] <phase> <type>` prefix + JSON payload.
-   */
-  format?: (phase: "before" | "after", event: BeforeEvent | AfterEvent) => string;
-}
-
-const defaultFormat = (phase: "before" | "after", event: BeforeEvent | AfterEvent): string =>
-  `[@xtandard/webhooks] ${phase} ${event.type} ${JSON.stringify(event)}`;
+/**
+ * Options for {@link createLogHook}: `log` (default `console.log`),
+ * `includeBefore`, `json` (one JSON object per line), `describe` (an extra
+ * text-format field) and `format` (replaces the whole line).
+ */
+export type LogHookOptions = kit.LogHookOptions<BeforeEvent, AfterEvent>;
 
 /**
- * Build a hook that logs each mutation event. Never throws from `before`, so it
- * never denies a mutation — it is a pure observer.
+ * A hook that logs every `after` event (and, with `includeBefore`, every
+ * `before` event) as `[@xtandard/webhooks] <phase> <type> <json>`. It never
+ * throws from `before`, so it never denies a write.
  */
 export function createLogHook(options: LogHookOptions = {}): WebhooksHooks {
-  const log = options.log ?? ((line: string) => console.log(line));
-  const format = options.format ?? defaultFormat;
-  const hook: WebhooksHooks = {
-    after(event) {
-      log(format("after", event));
-    },
-  };
-  if (options.includeBefore) {
-    hook.before = (event) => {
-      log(format("before", event));
-    };
-  }
-  return hook;
+  return kit.createLogHook<BeforeEvent, AfterEvent>({ source: "@xtandard/webhooks", ...options });
 }

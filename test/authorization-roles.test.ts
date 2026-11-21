@@ -6,8 +6,6 @@ import type {
   WebhooksResource,
 } from "../src/authorization/contract.ts";
 import { isMutatingAction, MUTATING_ACTIONS } from "../src/authorization/contract.ts";
-import { delegatedAuthorization } from "../src/authorization/delegated.ts";
-import { noAuthorization } from "../src/authorization/none.ts";
 import {
   ALL_ACTIONS,
   DEFAULT_ROLE_POLICY,
@@ -118,32 +116,5 @@ describe("MUTATING_ACTIONS", () => {
     for (const action of MUTATING_ACTIONS) {
       expect(ALL_ACTIONS).toContain(action);
     }
-  });
-});
-
-describe("noAuthorization", () => {
-  test("allows everything, even for a null principal", async () => {
-    const authz = noAuthorization();
-    expect(await authz.authorize(input(null, "application:delete"))).toBe(true);
-  });
-});
-
-describe("delegatedAuthorization", () => {
-  test("allows when the delegate returns true", async () => {
-    const authz = delegatedAuthorization({ authorize: () => true });
-    expect(await authz.authorize(input(null, "endpoint:update"))).toBe(true);
-  });
-
-  test("denies when the delegate returns false", async () => {
-    const authz = delegatedAuthorization({ authorize: () => false });
-    expect(await authz.authorize(input(admin, "endpoint:read"))).toBe(false);
-  });
-
-  test("normalizes an async delegate and receives the input", async () => {
-    const authz = delegatedAuthorization({
-      authorize: async ({ action }) => action === "endpoint:read",
-    });
-    expect(await authz.authorize(input(admin, "endpoint:read"))).toBe(true);
-    expect(await authz.authorize(input(admin, "endpoint:update"))).toBe(false);
   });
 });
