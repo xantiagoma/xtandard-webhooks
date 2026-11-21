@@ -57,8 +57,10 @@ export default defineConfig({
   staged: {
     // Pre-commit only formats (fast, and never errors on lint-ignored paths like
     // examples/**). Linting + typecheck run in the pre-push hook (`bun run check`)
-    // and in CI, where ignorePatterns resolve against the whole repo.
-    "*.{ts,tsx,md,mdx,json,jsonc,yml,yaml,css,html}": ["vp fmt"],
+    // and in CI, where ignorePatterns resolve against the whole repo. No .mdx (fmt ignores it),
+    // and a commit touching only fmt-ignored files (CHANGELOG.md) must not fail with
+    // "Expected at least one target file".
+    "*.{ts,tsx,md,json,jsonc,yml,yaml,css,html}": ["vp fmt --no-error-on-unmatched-pattern"],
   },
   pack: {
     entry: [
