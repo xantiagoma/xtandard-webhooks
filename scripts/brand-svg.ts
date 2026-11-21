@@ -189,11 +189,17 @@ await write(
   `${header(1024, 1024, "xtandard-webhooks")}<defs>${iconDefs}${limeGradient("lime")}</defs>\n${icon({ orbit: false, shadow: false })}\n</svg>`,
 );
 
-// symbol.svg — transparent symbol, cropped to its bounds
-await write(
-  "symbol.svg",
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${SYM.x} ${f(SYM.y)} ${SYM.w} ${f(SYM.h)}" width="${SYM.w}" height="${f(SYM.h)}" role="img" aria-label="xtandard-webhooks">\n<title>xtandard-webhooks</title>\n<defs>${limeGradient("lime")}</defs>\n${symbolBody()}\n</svg>`,
-);
+// symbol.svg / symbol-light.svg — the transparent symbol (no tile), cropped to its bounds: the
+// lime for dark surfaces, and the light lockup's deeper lime for light ones.
+for (const [name, light] of [
+  ["symbol.svg", false],
+  ["symbol-light.svg", true],
+] as const) {
+  await write(
+    name,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${SYM.x} ${f(SYM.y)} ${SYM.w} ${f(SYM.h)}" width="${SYM.w}" height="${f(SYM.h)}" role="img" aria-label="xtandard-webhooks">\n<title>xtandard-webhooks</title>\n<defs>${limeGradient("lime", light)}</defs>\n${symbolBody()}\n</svg>`,
+  );
+}
 
 // ── lockups ─────────────────────────────────────────────────────────────────
 const PREFIX = outline("xtandard-", 100);

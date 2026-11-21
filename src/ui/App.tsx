@@ -190,8 +190,22 @@ function AppShell({
               />
             ) : (
               <>
+                {/* The bare symbol (SVG, no tile), in each theme's lime (docs/BRAND.md). */}
                 {showBrandMark && !portal && brandTitle === "@xtandard/webhooks" && (
-                  <img src="symbol.svg" alt="" aria-hidden="true" className="h-5 w-auto" />
+                  <>
+                    <img
+                      src="symbol-light.svg"
+                      alt=""
+                      aria-hidden="true"
+                      className="h-5 w-auto dark:hidden"
+                    />
+                    <img
+                      src="symbol.svg"
+                      alt=""
+                      aria-hidden="true"
+                      className="hidden h-5 w-auto dark:block"
+                    />
+                  </>
                 )}
                 <span className="text-sm font-semibold tracking-tight">{brandTitle}</span>
               </>
