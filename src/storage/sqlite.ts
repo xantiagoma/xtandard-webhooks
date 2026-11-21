@@ -79,7 +79,8 @@ export function createSqliteStorage(options: SqliteStorageOptions = {}): SqliteW
     },
     async getKeys(prefix: string): Promise<string[]> {
       const rows = keysStmt.all(`${escapeLike(prefix)}%`) as Array<{ key: string }>;
-      return rows.map((r) => r.key);
+      // SQLite's LIKE folds ASCII case: keep only exact (case-sensitive) prefix matches.
+      return rows.map((r) => r.key).filter((key) => key.startsWith(prefix));
     },
     close(): void {
       if (ownsDb) db.close();

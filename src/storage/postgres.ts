@@ -180,7 +180,8 @@ export function createPostgresStorage(options: PostgresStorageOptions): Postgres
       const { rows } = await c.query(`SELECT key FROM ${table} WHERE key LIKE $1 ESCAPE '\\'`, [
         `${escapeLike(prefix)}%`,
       ]);
-      return rows.map((row) => String(row.key));
+      // Defensive: a case-/accent-insensitive column collation would widen LIKE matches.
+      return rows.map((row) => String(row.key)).filter((key) => key.startsWith(prefix));
     },
 
     async close(): Promise<void> {
