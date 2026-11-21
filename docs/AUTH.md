@@ -40,7 +40,7 @@ const auth = basicAuth({
 });
 ```
 
-HTTP Basic with scrypt password hashes (never plaintext at rest), timing-safe verification, and a proper `WWW-Authenticate` challenge. Pair with `AUTH_MODE=basic` + `AUTH_USERNAME`/`AUTH_PASSWORD_HASH` on the CLI/standalone.
+HTTP Basic with scrypt password hashes (never plaintext at rest), timing-safe verification, and a proper `WWW-Authenticate` challenge. Pair with `AUTH_MODE=basic` + `AUTH_USERNAME`/`AUTH_PASSWORD_HASH` on the CLI/standalone. `AUTH_MODE` accepts only `none` (the default, also when empty) or `basic`; any other value (e.g. a typo like `basci`) is rejected at startup rather than falling back to an open panel.
 
 ### `@xtandard/webhooks/auth/delegated`
 

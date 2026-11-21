@@ -20,6 +20,8 @@ const ENV = [
   "AUDIT_MAX_AGE",
   "RETRY_SCHEDULE",
   "APP",
+  "AUTH_MODE",
+  "PORT",
 ];
 const saved: Record<string, string | undefined> = {};
 
@@ -302,6 +304,22 @@ describe("cli env parsing", () => {
     expect(await run(["init"])).toBe(0);
     expect(out.join("")).toContain("Initialized");
   });
+});
+
+describe("cli serve auth", () => {
+  // A typo must not fall through to `none` and serve an open admin panel: `run`
+  // resolves (a listening server never would) with 1 before anything listens.
+  test.each(["basci", "BASIC", "Basic"])(
+    "serve rejects unknown AUTH_MODE=%s and exits 1 without listening",
+    async (mode) => {
+      process.env.AUTH_MODE = mode;
+      process.env.PORT = "4419";
+      expect(await run(["serve"])).toBe(1);
+      expect(err.join("")).toContain(`Unknown AUTH_MODE "${mode}" (expected none or basic)`);
+      expect(err.join("")).not.toContain("AUTH_MODE=none");
+      expect(out.join("")).not.toContain("listening");
+    },
+  );
 });
 
 const NOW_ISO = new Date().toISOString();
