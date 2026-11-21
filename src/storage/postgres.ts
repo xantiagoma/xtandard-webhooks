@@ -46,5 +46,9 @@ const DEFAULT_TABLE = "xtandard_webhooks";
 export function createPostgresStorage(
   options: PostgresStorageOptions = {},
 ): PostgresWebhooksStorage {
-  return kit.createPostgresStorage({ ...options, table: options.table ?? DEFAULT_TABLE });
+  return kit.createPostgresStorage({
+    subpath: "@xtandard/webhooks/storage/postgres",
+    ...options,
+    table: options.table ?? DEFAULT_TABLE,
+  });
 }

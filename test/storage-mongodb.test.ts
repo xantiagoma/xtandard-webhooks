@@ -88,7 +88,7 @@ describe("createMongoStorage (webhooks defaults)", () => {
 
   test("a client or a url is required", async () => {
     await expect(createMongoStorage({}).getItem("whk/acme/k")).rejects.toThrow(
-      /requires either a `client` or a `url`/,
+      /^@xtandard\/webhooks\/storage\/mongodb requires either a `client` or a `url`/,
     );
   });
 });

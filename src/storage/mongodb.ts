@@ -50,6 +50,7 @@ export type MongoWebhooksStorage = kit.MongoKvStorage;
  */
 export function createMongoStorage(options: MongoStorageOptions): MongoWebhooksStorage {
   return kit.createMongoStorage({
+    subpath: "@xtandard/webhooks/storage/mongodb",
     ...options,
     dbName: options.dbName ?? "xtandard_webhooks",
     collectionName: options.collectionName ?? "webhooks_kv",

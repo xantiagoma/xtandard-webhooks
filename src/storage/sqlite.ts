@@ -38,5 +38,9 @@ export type SqliteWebhooksStorage = kit.SqliteKvStorage;
  * ```
  */
 export function createSqliteStorage(options: SqliteStorageOptions = {}): SqliteWebhooksStorage {
-  return kit.createSqliteStorage({ ...options, table: options.table ?? "xtandard_webhooks" });
+  return kit.createSqliteStorage({
+    subpath: "@xtandard/webhooks/storage/sqlite",
+    ...options,
+    table: options.table ?? "xtandard_webhooks",
+  });
 }

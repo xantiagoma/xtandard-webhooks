@@ -26,10 +26,16 @@
  * @module
  */
 
+import * as kit from "@xtandard/kit/storage/drizzle";
+
 export {
-  createDrizzleStorage,
   KeyCollisionError,
   type DrizzleKvStorage as DrizzleWebhooksStorage,
   type DrizzleKvTable,
   type DrizzleStorageOptions,
 } from "@xtandard/kit/storage/drizzle";
+
+/** Create a Drizzle-backed storage over your `db` and a `*WebhooksTable` table. No DDL. */
+export function createDrizzleStorage(options: kit.DrizzleStorageOptions): kit.DrizzleKvStorage {
+  return kit.createDrizzleStorage({ subpath: "@xtandard/webhooks/storage/drizzle", ...options });
+}

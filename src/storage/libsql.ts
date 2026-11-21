@@ -39,5 +39,9 @@ export type LibsqlWebhooksStorage = kit.LibsqlKvStorage;
 
 /** Create a libSQL/Turso-backed {@link LibsqlWebhooksStorage}. The table is created on first use. */
 export function createLibsqlStorage(options: LibsqlStorageOptions): LibsqlWebhooksStorage {
-  return kit.createLibsqlStorage({ ...options, table: options.table ?? "xtandard_webhooks" });
+  return kit.createLibsqlStorage({
+    subpath: "@xtandard/webhooks/storage/libsql",
+    ...options,
+    table: options.table ?? "xtandard_webhooks",
+  });
 }
