@@ -19,18 +19,22 @@ import type {
   WebhooksAction,
   WebhooksResource,
 } from "../authorization/contract.ts";
+import type { WebhooksCore } from "../core.ts";
 import {
-  ConflictError,
-  IdempotencyConflictError,
-  NotFoundError,
-  PayloadTooLargeError,
-  ReadonlyError,
-  type WebhooksCore,
-} from "../core.ts";
-import { HookDeniedError } from "../hooks/contract.ts";
-import { PORTAL_TOKEN_PREFIX, PortalTokenError, verifyPortalToken } from "../portal.ts";
+  authenticate,
+  authorize as authorizeRequest,
+  error,
+  HttpError,
+  intParam,
+  json,
+  mapError as kitMapError,
+  match as kitMatch,
+  type Authenticated,
+  type ErrorMap,
+} from "@xtandard/kit/server";
+import { PORTAL_TOKEN_PREFIX, verifyPortalToken } from "../portal.ts";
 import type { Actor, DeliveryStatus, Endpoint, EventType, JsonValue } from "../schema.ts";
-import { ValidationError } from "../validation.ts";
+import { KEY_REGEX } from "../validation.ts";
 import { buildOpenApiDocument } from "./openapi.ts";
 
 /**
@@ -77,30 +81,19 @@ export interface ApiContext {
   portal?: WebhooksPortalOptions;
 }
 
-const json = (data: unknown, status = 200): Response =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
-
-const error = (status: number, message: string, extra?: Record<string, unknown>): Response =>
-  json({ error: message, ...extra }, status);
-
-interface Matched {
-  params: Record<string, string>;
-}
-
-/** Match `pattern` (with `:name` segments) against `path`. */
-function match(pattern: string, path: string): Matched | null {
-  const pp = pattern.split("/").filter(Boolean);
-  const ap = path.split("/").filter(Boolean);
-  if (pp.length !== ap.length) return null;
-  const params: Record<string, string> = {};
-  for (let i = 0; i < pp.length; i++) {
-    const seg = pp[i]!;
-    const val = ap[i]!;
-    if (seg.startsWith(":")) params[seg.slice(1)] = decodeURIComponent(val);
-    else if (seg !== val) return null;
+/**
+ * Match `pattern` (with `:name` segments) against `path` (the kit's `match`: a
+ * malformed `%` escape is no match). Every parameter names a stored key
+ * segment — an application key, event type name or generated id — so one that
+ * could never have been created (`KEY_REGEX`) is a 404 before it reaches
+ * storage: on MySQL's PAD SPACE collation `"acme "` would otherwise read and
+ * write `"acme"`.
+ */
+function match(pattern: string, path: string): { params: Record<string, string> } | null {
+  const params = kitMatch(pattern, path);
+  if (!params) return null;
+  if (!Object.values(params).every((value) => KEY_REGEX.test(value) && !/^\.+$/.test(value))) {
+    throw new HttpError(404, "Not found");
   }
   return { params };
 }
@@ -129,13 +122,6 @@ function actorFor(principal: Principal): Actor {
     ...(principal.email !== undefined ? { email: principal.email } : {}),
     ...(principal.name !== undefined ? { name: principal.name } : {}),
   };
-}
-
-/** Parse a positive-integer query param, or `undefined`. */
-function intParam(value: string | null): number | undefined {
-  if (value === null) return undefined;
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
 }
 
 /**
@@ -176,37 +162,34 @@ export async function handleApiRequest(
   // --- Authentication ---
   // A portal token short-circuits the host's providers entirely: valid →
   // portal-scoped principal; invalid/expired → 401 (never fall back to the
-  // host's auth with an explicitly presented, rejected credential).
-  let principal: Principal | null = null;
-  let portalScope: PortalScope | null = null;
-  const bearer = request.headers.get("authorization");
-  if (ctx.portal && bearer?.startsWith(`Bearer ${PORTAL_TOKEN_PREFIX}`)) {
-    try {
-      const { applicationKey } = await verifyPortalToken(
-        ctx.portal.secret,
-        bearer.slice("Bearer ".length),
-      );
-      principal = {
-        id: `portal:${applicationKey}`,
-        metadata: { portal: true, applicationKey },
-      };
-      portalScope = {
-        applicationKey,
-        allow: new Set(ctx.portal.allow ?? DEFAULT_PORTAL_ACTIONS),
-      };
-    } catch (err) {
-      return mapError(err);
-    }
-  } else {
-    try {
-      principal = await ctx.auth.authenticate(request);
-    } catch (err) {
-      // A throwing auth provider is a backend failure (IdP down, DB error) —
-      // surface it as 500, not a misleading 401. `null` means "no valid
-      // credentials"; an exception means "couldn't decide".
-      return mapError(err);
-    }
+  // host's auth with an explicitly presented, rejected credential). A throwing
+  // auth provider is a backend failure (IdP down, DB error) — surfaced as 500,
+  // not a misleading 401.
+  const portal = ctx.portal;
+  let who: Authenticated<PortalScope>;
+  try {
+    who = await authenticate<PortalScope>(request, {
+      auth: ctx.auth,
+      ...(portal
+        ? {
+            scoped: {
+              prefix: PORTAL_TOKEN_PREFIX,
+              verify: async (token) => ({
+                applicationKey: (await verifyPortalToken(portal.secret, token)).applicationKey,
+                allow: new Set(portal.allow ?? DEFAULT_PORTAL_ACTIONS),
+              }),
+              principal: ({ applicationKey }) => ({
+                id: `portal:${applicationKey}`,
+                metadata: { portal: true, applicationKey },
+              }),
+            },
+          }
+        : {}),
+    });
+  } catch (err) {
+    return mapError(err);
   }
+  const { principal, scoped: portalScope } = who;
 
   // Public bootstrap config (whether the client should show a login, whether
   // the SPA renders the reduced portal chrome, etc.).
@@ -233,24 +216,24 @@ export async function handleApiRequest(
     action: WebhooksAction,
     resource: WebhooksResource,
   ): Promise<Response | null> => {
-    if (portalScope) {
-      // Defense in depth: the host's authorization provider is NOT consulted
-      // for portal principals — the token's scope is the whole grant.
-      if (!portalScope.allow.has(action)) return error(403, "Forbidden", { action });
-      // Event types are a single GLOBAL catalog shared by every application, so
-      // a token scoped to one application may only ever READ them — never
-      // mutate the catalog other tenants depend on, even if the host widened
-      // `portal.allow` to include event-type writes.
-      if (resource.type === "event-type") {
-        if (action !== "event-type:read") return error(403, "Forbidden", { action });
-        return null;
-      }
-      if (resource.applicationKey !== portalScope.applicationKey) {
-        return error(403, "Forbidden", { action });
-      }
-      return null;
-    }
-    const ok = await ctx.authorization.authorize({ principal, action, resource, request });
+    const ok = await authorizeRequest(
+      who,
+      { action, resource, request },
+      {
+        authorization: ctx.authorization,
+        // Defense in depth: the host's authorization provider is NOT consulted
+        // for portal principals — the token's scope is the whole grant.
+        scope: (grant, action, resource) => {
+          if (!grant.allow.has(action)) return false;
+          // Event types are a single GLOBAL catalog shared by every application,
+          // so a token scoped to one application may only ever READ them — never
+          // mutate the catalog other tenants depend on, even if the host widened
+          // `portal.allow` to include event-type writes.
+          if (resource.type === "event-type") return action === "event-type:read";
+          return resource.applicationKey === grant.applicationKey;
+        },
+      },
+    );
     return ok ? null : error(403, "Forbidden", { action });
   };
 
@@ -502,7 +485,7 @@ export async function handleApiRequest(
         const url = new URL(request.url);
         const eventType = url.searchParams.get("eventType") ?? undefined;
         const before = url.searchParams.get("before") ?? undefined;
-        const limit = intParam(url.searchParams.get("limit"));
+        const limit = intParam(url.searchParams.get("limit"), { invalid: "ignore" });
         return json(
           await ctx.core.listMessages(app, {
             ...(eventType !== undefined ? { eventType } : {}),
@@ -562,7 +545,7 @@ export async function handleApiRequest(
       const status = url.searchParams.get("status") ?? undefined;
       const endpointId = url.searchParams.get("endpoint") ?? undefined;
       const before = url.searchParams.get("before") ?? undefined;
-      const limit = intParam(url.searchParams.get("limit"));
+      const limit = intParam(url.searchParams.get("limit"), { invalid: "ignore" });
       return json(
         await ctx.core.listDeliveries(app, {
           ...(status !== undefined ? { status: status as DeliveryStatus } : {}),
@@ -632,57 +615,29 @@ export async function handleApiRequest(
 }
 
 /**
- * Cross-bundle error detection: `instanceof` first, `err.name` fallback. An
- * error thrown from a separate subpath bundle carries its own copy of the
- * class, so `instanceof` alone would mis-map it to 500.
+ * The webhooks error contract (status + `code`). Errors are matched by `name`,
+ * so a class copy from another bundle still maps; `HookDeniedError` (its own
+ * status, `HOOK_DENIED`) and `HttpError` are the kit built-ins.
  */
-function isNamed(err: unknown, ctor: new (...args: never[]) => Error, name: string): boolean {
-  return err instanceof ctor || (err instanceof Error && err.name === name);
-}
-
-/**
- * A hook denial, detected by `name` rather than `instanceof`: a hook thrown from
- * a separate subpath bundle carries its own copy of the `HookDeniedError` class,
- * so `instanceof` would miss it and mis-map the denial to 500. Returns the
- * status to respond with, or `null` if not a denial.
- */
-function hookDeniedStatus(err: unknown): number | null {
-  if (err instanceof HookDeniedError) return err.status;
-  if (err instanceof Error && err.name === "HookDeniedError") {
-    const status = (err as { status?: unknown }).status;
-    return typeof status === "number" ? status : 403;
-  }
-  return null;
-}
+const ERROR_MAP: ErrorMap = {
+  ReadonlyError: { status: 403, code: "READONLY" },
+  PortalTokenError: { status: 401, code: "PORTAL_TOKEN" },
+  NotFoundError: { status: 404 },
+  IdempotencyConflictError: { status: 409, code: "IDEMPOTENCY_CONFLICT" },
+  ConflictError: { status: 409, code: "CONFLICT" },
+  PayloadTooLargeError: { status: 413, code: "PAYLOAD_TOO_LARGE" },
+  ValidationError: {
+    status: 422,
+    code: "VALIDATION",
+    extra: (e) => {
+      const errors = (e as { errors?: unknown }).errors;
+      return { errors: Array.isArray(errors) ? errors : [] };
+    },
+  },
+  SyntaxError: () => error(400, "Invalid JSON body"),
+};
 
 /** Map domain errors to HTTP responses. */
 function mapError(err: unknown): Response {
-  if (isNamed(err, ReadonlyError, "ReadonlyError")) {
-    return error(403, (err as Error).message, { code: "READONLY" });
-  }
-  const denied = hookDeniedStatus(err);
-  if (denied !== null) return error(denied, (err as Error).message, { code: "HOOK_DENIED" });
-  if (isNamed(err, PortalTokenError, "PortalTokenError")) {
-    return error(401, (err as Error).message, { code: "PORTAL_TOKEN" });
-  }
-  if (isNamed(err, NotFoundError, "NotFoundError")) return error(404, (err as Error).message);
-  if (isNamed(err, IdempotencyConflictError, "IdempotencyConflictError")) {
-    return error(409, (err as Error).message, { code: "IDEMPOTENCY_CONFLICT" });
-  }
-  if (isNamed(err, ConflictError, "ConflictError")) {
-    return error(409, (err as Error).message, { code: "CONFLICT" });
-  }
-  if (isNamed(err, PayloadTooLargeError, "PayloadTooLargeError")) {
-    return error(413, (err as Error).message, { code: "PAYLOAD_TOO_LARGE" });
-  }
-  if (isNamed(err, ValidationError, "ValidationError")) {
-    const errors = (err as { errors?: unknown }).errors;
-    return error(422, (err as Error).message, {
-      code: "VALIDATION",
-      errors: Array.isArray(errors) ? errors : [],
-    });
-  }
-  if (err instanceof SyntaxError) return error(400, "Invalid JSON body");
-  const message = err instanceof Error ? err.message : "Internal error";
-  return error(500, message);
+  return kitMapError(err, ERROR_MAP);
 }

@@ -120,7 +120,7 @@ describe("issue 2 — the panel honors a prebuilt core's split storage", () => {
 
   it("requires storage or a core", () => {
     expect(() => createFetchHandler({ dispatcher: false } as never)).toThrow(
-      /requires either `storage` or a prebuilt `core`/,
+      /createFetchHandler requires either `storage` or `core`/,
     );
   });
 });

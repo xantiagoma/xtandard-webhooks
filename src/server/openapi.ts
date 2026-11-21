@@ -13,13 +13,15 @@
  * @module
  */
 
+import { VERSION } from "../version.ts";
+
 /** Options for {@link buildOpenApiDocument}. */
 export interface OpenApiOptions {
   /** Mount prefix used in the `servers` url (e.g. `"/webhooks"`). */
   basePath?: string;
   /** Document title. */
   title?: string;
-  /** Document version (defaults to the package's API version). */
+  /** Document version (defaults to the package version). */
   version?: string;
 }
 
@@ -210,7 +212,7 @@ export function buildOpenApiDocument(options: OpenApiOptions = {}): Record<strin
     openapi: "3.1.0",
     info: {
       title: options.title ?? "@xtandard/webhooks Admin API",
-      version: options.version ?? "0.1.0",
+      version: options.version ?? VERSION,
       description:
         "Admin/control-plane API for @xtandard/webhooks: applications, the global event-type catalog, endpoints (with Standard Webhooks signing secrets), message publishing, and delivery observability. Portal tokens (Authorization: Bearer whpt_…) hit the same surface scoped to one application.",
     },
