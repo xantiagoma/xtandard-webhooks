@@ -401,7 +401,7 @@
     "examples:portal-embed": "bun scripts/example.ts portal-embed"
   },
   "dependencies": {
-    "@xtandard/kit": "file:/Users/santi/Projects/xtandard-kit-wt-pilot/pack/xtandard-kit-0.1.0.tgz",
+    "@xtandard/kit": "file:/Users/santi/Projects/xtandard-kit-wt-pilot/pack/xtandard-kit-0.1.1-dev.ff4966e.tgz",
     "valibot": "^1.0.0",
     "wouter": "^3.10.0"
   },
