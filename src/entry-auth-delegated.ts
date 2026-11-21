@@ -1,8 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/auth/delegated`. Re-exports the
- * delegated auth provider so the bundler can map it to its own dist file.
+ * Delegated authentication: `delegatedAuth()` plugs your own scheme (JWT,
+ * sessions, API keys, an existing middleware) into the panel without
+ * implementing the `AuthProvider` contract by hand.
  *
- * @module
+ * Import from `@xtandard/webhooks/auth/delegated`.
+ *
+ * @module auth/delegated
  */
 
 export * from "./auth/delegated.ts";

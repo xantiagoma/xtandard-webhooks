@@ -10,7 +10,7 @@
  *   given the secret, verifies) every delivery it receives — including
  *   programmable failures to exercise the retry path.
  *
- * @module
+ * @module testing
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";

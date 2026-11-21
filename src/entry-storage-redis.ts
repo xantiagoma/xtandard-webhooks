@@ -1,8 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/redis`. Re-exports the Redis
- * storage adapters so the bundler can map them to their own dist file.
+ * Redis storage: `createRedisStorage()` (JSON strings) and
+ * `createRedisJSONStorage()` (RedisJSON documents) over node-redis, with
+ * native delivery-queue claiming and pub/sub watch.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/redis`.
+ *
+ * @module storage/redis
  */
 
 export * from "./storage/redis.ts";

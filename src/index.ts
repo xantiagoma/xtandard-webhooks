@@ -2,10 +2,15 @@
  * `@xtandard/webhooks` — self-hosted, embeddable, Standard Webhooks-compliant
  * outbound-webhooks control plane.
  *
- * Root export surface. Grows as modules land; see the repository README for
- * the full subpath-export map.
+ * The root export: the core and its types (also on `/core` and `/schema`),
+ * the dispatcher, the panel's web-standard fetch handler, signing (also on
+ * `/signing`), portal tokens, the hooks contract, and the auth/authorization
+ * contracts. Storage adapters, auth providers, framework adapters and the
+ * React embeds are separate subpaths with optional peer dependencies.
  *
- * @module
+ * Import from `@xtandard/webhooks`.
+ *
+ * @module webhooks
  */
 
 export * from "./schema.ts";

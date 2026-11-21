@@ -1,9 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/elysia2`. Re-exports the Elysia 2 adapter
- * (plain panel + typed Eden plugin) so the bundler can map it to its own dist
- * file.
+ * Elysia 2 adapter: the same surface as `@xtandard/webhooks/elysia`
+ * (`webhooksPanel()` and the typed `webhooksElysia()` plugin), built against
+ * Elysia 2 and `@elysia/eden`.
  *
- * @module
+ * Import from `@xtandard/webhooks/elysia2`.
+ *
+ * @module elysia2
  */
 
 export * from "./adapters/elysia2.ts";

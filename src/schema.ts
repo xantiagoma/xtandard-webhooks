@@ -6,7 +6,9 @@
  * publish hot path and the receiver. Runtime validation (which pulls in
  * `valibot`) lives in {@link ./validation}.
  *
- * @module
+ * Import from `@xtandard/webhooks/schema` (also re-exported by the root).
+ *
+ * @module schema
  */
 
 /** JSON-serializable value, used for payloads, metadata, and event-type schemas. */

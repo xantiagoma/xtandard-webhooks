@@ -1,8 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/drizzle`. Re-exports the
- * Drizzle storage adapter so the bundler can map it to its own dist file.
+ * Drizzle storage: `createDrizzleStorage()` reads and writes a table you own
+ * (built with the `drizzle/*` factories) through the Drizzle database you
+ * pass. No DDL, no connection of its own; Postgres, MySQL or SQLite.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/drizzle`.
+ *
+ * @module storage/drizzle
  */
 
 export * from "./storage/drizzle.ts";

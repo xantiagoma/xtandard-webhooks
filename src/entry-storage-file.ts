@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/file`. Re-exports the
- * file-system storage adapter so the bundler can map it to its own dist file.
+ * File-system storage: `createFileStorage()` persists each key as a JSON file
+ * under a base directory. Zero dependencies; Bun and Node.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/file`.
+ *
+ * @module storage/file
  */
 
 export * from "./storage/file.ts";

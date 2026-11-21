@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/mongodb`. Re-exports the
- * MongoDB storage adapter so the bundler can map it to its own dist file.
+ * MongoDB storage: `createMongoStorage()` over the `mongodb` driver, one
+ * collection of `{ _id: key, value }` documents.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/mongodb`.
+ *
+ * @module storage/mongodb
  */
 
 export * from "./storage/mongodb.ts";

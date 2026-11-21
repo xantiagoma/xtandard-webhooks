@@ -1,9 +1,11 @@
 /**
- * Subpath entry for `@xtandard/webhooks/storage/cloudflare-kv`. Re-exports the
- * Cloudflare Workers KV storage adapter so the bundler can map it to its own
- * dist file.
+ * Cloudflare Workers KV storage: `createCloudflareKvStorage()` wraps a
+ * `KVNamespace` binding. No npm peer dependency; dispatch runs from a cron
+ * trigger.
  *
- * @module
+ * Import from `@xtandard/webhooks/storage/cloudflare-kv`.
+ *
+ * @module storage/cloudflare-kv
  */
 
 export * from "./storage/cloudflare-kv.ts";

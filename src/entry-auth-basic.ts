@@ -1,8 +1,12 @@
 /**
- * Subpath entry for `@xtandard/webhooks/auth/basic`. Re-exports the HTTP Basic
- * auth provider so the bundler can map it to its own dist file.
+ * HTTP Basic authentication for the panel: `basicAuth()` checks the
+ * `Authorization: Basic` header against a configured user list (scrypt
+ * password hashes via `hashPassword`, a custom verifier, or plaintext for
+ * development only).
  *
- * @module
+ * Import from `@xtandard/webhooks/auth/basic`.
+ *
+ * @module auth/basic
  */
 
 export * from "./auth/basic.ts";

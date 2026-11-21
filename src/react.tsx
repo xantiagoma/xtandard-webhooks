@@ -20,7 +20,7 @@
  * `react` and `react-dom` are peer dependencies in this mode. The components are
  * self-contained otherwise (TanStack Query and styles are bundled).
  *
- * @module
+ * @module react
  */
 
 import React from "react";

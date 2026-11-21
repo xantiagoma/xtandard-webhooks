@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/drizzle/mysql`. Re-exports the MySQL
- * Drizzle table factory so the bundler can map it to its own dist file.
+ * MySQL Drizzle table factory for the webhooks KV store: `mysqlWebhooksTable()`
+ * puts the table in your Drizzle schema and migrations. Schema-only.
  *
- * @module
+ * Import from `@xtandard/webhooks/drizzle/mysql`.
+ *
+ * @module drizzle/mysql
  */
 
 export * from "./drizzle/mysql.ts";

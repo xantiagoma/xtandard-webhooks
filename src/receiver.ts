@@ -6,7 +6,7 @@
  * — this package, Svix, or anything else that follows the spec — so it is
  * useful even if the sending side isn't `@xtandard/webhooks`.
  *
- * @module
+ * @module receiver
  */
 
 import type { WebhookEnvelope } from "./schema.ts";

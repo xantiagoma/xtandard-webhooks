@@ -1,0 +1,62 @@
+/* The logo's palette as Starlight's colour properties: lime on charcoal (shared with the rest of
+   the xtandard family).
+   Dark: charcoal (#111311) background, lime-400 (#a3e635) for links and accents (~13:1).
+   Light: white background, lime-800 (#3f6212) for links (~7.6:1) — lime itself is too pale on white. */
+
+:root {
+  --sl-color-accent-low: #1f2d0a;
+  --sl-color-accent: #65a30d;
+  --sl-color-accent-high: #a3e635;
+
+  --sl-color-white: #f7f8f6;
+  --sl-color-gray-1: #e7e9e4;
+  --sl-color-gray-2: #c6c9c2;
+  --sl-color-gray-3: #8d9188;
+  --sl-color-gray-4: #52564e;
+  --sl-color-gray-5: #2e312b;
+  --sl-color-gray-6: #1a1c18;
+  --sl-color-black: #111311;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #ecfccb;
+  --sl-color-accent: #4d7c0f;
+  --sl-color-accent-high: #3f6212;
+
+  --sl-color-white: #111311;
+  --sl-color-gray-1: #1d201b;
+  --sl-color-gray-2: #363a33;
+  --sl-color-gray-3: #585d54;
+  --sl-color-gray-4: #8d9188;
+  --sl-color-gray-5: #d4d7d0;
+  --sl-color-gray-6: #eef0ec;
+  --sl-color-gray-7: #f7f8f6;
+  --sl-color-black: #ffffff;
+}
+
+/* Mermaid diagrams: centred, never wider than the column, scroll when they must. */
+pre.mermaid,
+.mermaid {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  background: transparent;
+}
+
+/* Wide diagrams scroll sideways on small screens instead of shrinking until their labels are
+   unreadable. */
+.mermaid svg {
+  min-width: min(40rem, 100%);
+}
+@media (max-width: 50rem) {
+  .mermaid svg {
+    min-width: 40rem;
+  }
+}
+
+/* Screenshots in the guides: framed, never wider than the column. */
+.sl-markdown-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}

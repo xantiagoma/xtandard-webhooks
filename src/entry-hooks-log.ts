@@ -1,8 +1,10 @@
 /**
- * Subpath entry for `@xtandard/webhooks/hooks/log`. Re-exports the reference
- * logging hook so the bundler can map it to its own dist file.
+ * A reference hook: `createLogHook()` logs mutation events. A starting point
+ * for your own `after` side effects. Zero dependencies.
  *
- * @module
+ * Import from `@xtandard/webhooks/hooks/log`.
+ *
+ * @module hooks/log
  */
 
 export * from "./hooks/log.ts";

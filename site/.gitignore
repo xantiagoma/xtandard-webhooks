@@ -1,0 +1,5 @@
+# Written by scripts/sync.ts and starlight-typedoc; never edit or commit.
+/src/content/docs/
+# Astro's generated types, caches and build output.
+/.astro/
+/dist/
