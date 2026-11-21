@@ -48,7 +48,6 @@ import {
   jsonCodec,
   redisConnection,
   stringCodec,
-  type RedisLike,
   type RedisValueCodec,
 } from "@xtandard/kit/storage/redis/internals";
 import { parseDueKey, ROOT } from "../keys.ts";
@@ -77,15 +76,6 @@ export interface RedisStorageOptions extends Omit<KitRedisStorageOptions, "onWri
  * adapter created. A client you passed in is left for you to manage.
  */
 export interface RedisWebhooksStorage extends RedisKvStorage, DeliveryQueueStorage {}
-
-/**
- * The sorted-set commands the due queue needs on top of the kit's client view.
- * TODO(kit): drop once `RedisLike` / the `onWrite` context client carries `zAdd`/`zRem`.
- */
-type RedisZsetClient = RedisLike & {
-  zAdd(key: string, members: { score: number; value: string }): Promise<unknown>;
-  zRem(key: string, member: string): Promise<unknown>;
-};
 
 /**
  * Atomically pop up to `ARGV[2]` members due at or before `ARGV[1]` by
@@ -166,9 +156,8 @@ function buildRedisStorage(
     codec,
     connection,
     // Mirror due-index keys into the due zset so claimDue can pop by score.
-    onWrite: async (key, value, ctx) => {
+    onWrite: async (key, value, { client }) => {
       if (!DUE_KEY_RE.test(key)) return;
-      const client = ctx.client as RedisZsetClient;
       if (value === null) {
         await client.zRem(dueZsetKey, key);
         return;
@@ -181,7 +170,7 @@ function buildRedisStorage(
   return {
     ...base,
     async claimDue(input) {
-      const c = (await connection.get()) as RedisZsetClient;
+      const c = await connection.get();
       const nowMillis = Date.parse(input.now);
       // Atomic pop: reposition due members at the lease expiry so no concurrent
       // claimer can see them, while a crashed claimer's members re-surface.

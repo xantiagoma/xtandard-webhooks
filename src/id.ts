@@ -7,26 +7,16 @@
  * @module
  */
 
+import { createIdGenerator } from "@xtandard/kit/util";
+
 /** Prefixes for the four generated entity id kinds. */
 export type IdPrefix = "msg" | "ep" | "dlv" | "atp";
 
-const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-const ID_LENGTH = 22;
-const RANDOM_BYTES = 16;
-
-/** Encode 128 random bits as a fixed-length 22-char base62 string. */
-function randomBase62(): string {
-  const bytes = new Uint8Array(RANDOM_BYTES);
-  crypto.getRandomValues(bytes);
-  let value = 0n;
-  for (const b of bytes) value = (value << 8n) | BigInt(b);
-  let out = "";
-  while (value > 0n) {
-    out = ALPHABET[Number(value % 62n)] + out;
-    value /= 62n;
-  }
-  return out.padStart(ID_LENGTH, "0");
-}
+/** The persisted id format: random base62 (ADR 0005 — ids are stored data). */
+const ids = createIdGenerator<IdPrefix>({
+  format: "base62",
+  prefixes: ["msg", "ep", "dlv", "atp"],
+});
 
 /**
  * Generate a new entity id, e.g. `newId("msg")` → `"msg_0uK9…"` (22-char base62
@@ -40,10 +30,10 @@ function randomBase62(): string {
  * ```
  */
 export function newId(prefix: IdPrefix): string {
-  return `${prefix}_${randomBase62()}`;
+  return ids.newId(prefix);
 }
 
 /** Regex an id of the given prefix must match. */
 export function idPattern(prefix: IdPrefix): RegExp {
-  return new RegExp(`^${prefix}_[0-9A-Za-z]{${ID_LENGTH}}$`);
+  return ids.idPattern(prefix);
 }

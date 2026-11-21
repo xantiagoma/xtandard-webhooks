@@ -19,7 +19,7 @@
  * @module core
  */
 
-import { canonicalStringify } from "./canonical.ts";
+import { canonicalStringify } from "@xtandard/kit/util";
 import {
   attemptDelivery,
   buildSignedRequest,
