@@ -57,6 +57,10 @@ describe.skipIf(!MYSQL_URL)("createDrizzleStorage (mysql, live)", () => {
       // `mysql2/promise` and `mysql2` ship separate (incompatible) Pool typings; the runtime object is the same.
       return createDrizzleStorage({ db: drizzle(p as never), table });
     },
-    { t: { describe, test, expect }, timeout: 30_000 },
+    {
+      t: { describe, test, expect },
+      capabilities: { compareAndSwap: true, watch: false },
+      timeout: 30_000,
+    },
   );
 });

@@ -34,8 +34,8 @@ export type MakeStorage = () => Promise<WebhooksStorage> | WebhooksStorage;
 export interface StorageContractOptions {
   /** The injected test API (`{ describe, test, expect }` from vitest or bun:test). */
   t: ConformanceTestApi;
-  /** Capabilities for the kit suite. Default: detected CAS, no watch. */
-  capabilities?: ConformanceCapabilities;
+  /** Capabilities for the kit suite — declare every one (`false` for what the driver lacks). */
+  capabilities: ConformanceCapabilities;
   /** Run the {@link DeliveryQueueStorage.claimDue} semantics tests. */
   deliveryQueue?: boolean;
   /** Write a non-canonical stored form directly (the kit's legacy-CAS case). */
@@ -233,7 +233,7 @@ export function runStorageContractTests(
   const shared = { t: options.t, keyRoot: ROOT, timeout: options.timeout };
   runStorageConformance(name, makeStorage, {
     ...shared,
-    capabilities: options.capabilities ?? { compareAndSwap: true, watch: false },
+    capabilities: options.capabilities,
     seedLegacy: options.seedLegacy,
   });
   runConformanceCases(`webhooks key layout: ${name}`, dueIndexCases, makeStorage, shared);

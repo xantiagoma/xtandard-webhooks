@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createRedisStorage, type RedisWebhooksStorage } from "../src/storage/redis.ts";
+import { asRedisClient, fakeRedis, type FakeRedis } from "@xtandard/kit/storage/testing";
+import {
+  createRedisJSONStorage,
+  createRedisStorage,
+  type RedisWebhooksStorage,
+} from "../src/storage/redis.ts";
 import { hasDeliveryQueue, isWatchable } from "../src/storage/contract.ts";
 import { dueKey } from "../src/keys.ts";
 import { runStorageContractTests } from "./storage-contract.ts";
@@ -87,76 +92,73 @@ describe.skipIf(!REDIS_URL)("createRedisStorage (live)", () => {
 });
 
 /**
- * A fake node-redis client (Map-backed) recording zset operations — enough to
- * verify the adapter mirrors due-index keys into the due zset without a server.
+ * The webhooks claim script on the kit's fake client: `ZRANGEBYSCORE` up to
+ * `ARGV[1]` (limit `ARGV[2]`), each member repositioned at `ARGV[3]`.
  */
-function fakeZsetClient() {
-  const strings = new Map<string, string>();
-  const zsets = new Map<string, Map<string, number>>();
-  const zAddCalls: Array<{ key: string; score: number; value: string }> = [];
-  const zRemCalls: Array<{ key: string; member: string }> = [];
-  const client = {
-    isOpen: true,
-    on: () => client,
-    connect: async () => client,
-    quit: async () => undefined,
-    get: async (key: string) => strings.get(key) ?? null,
-    set: async (key: string, value: string) => {
-      strings.set(key, value);
+function fakeWithClaim(): FakeRedis {
+  return fakeRedis({
+    eval: (script, keys, args, fake) => {
+      if (!script.includes("ZRANGEBYSCORE")) return undefined;
+      const [now, limit, lease] = args.map(Number) as [number, number, number];
+      const zset = fake.zsets.get(keys[0]!) ?? new Map<string, number>();
+      const members = [...zset]
+        .filter(([, score]) => score <= now)
+        .sort((x, y) => x[1] - y[1])
+        .slice(0, limit)
+        .map(([member]) => member);
+      for (const member of members) zset.set(member, lease);
+      return members;
     },
-    del: async (key: string) => {
-      strings.delete(key);
+  });
+}
+
+/** Conformance + claimDue on both codecs, no server needed. */
+let fake = fakeWithClaim();
+for (const [name, create] of [
+  ["redis (fake client)", createRedisStorage],
+  ["redisJSON (fake client)", createRedisJSONStorage],
+] as const) {
+  runStorageContractTests(
+    name,
+    () => create({ client: asRedisClient((fake = fakeWithClaim())), prefix: "ns" }),
+    {
+      t: { describe, test, expect },
+      capabilities: { compareAndSwap: true, watch: { settleMs: 5 } },
+      deliveryQueue: true,
+      seedLegacy: async (_storage, key, raw) => {
+        fake.strings.set(`ns:${key}`, raw);
+      },
     },
-    zAdd: async (key: string, member: { score: number; value: string }) => {
-      const z = zsets.get(key) ?? new Map<string, number>();
-      z.set(member.value, member.score);
-      zsets.set(key, z);
-      zAddCalls.push({ key, score: member.score, value: member.value });
-    },
-    zRem: async (key: string, member: string) => {
-      zsets.get(key)?.delete(member);
-      zRemCalls.push({ key, member });
-    },
-    eval: async () => [],
-    scanIterator: async function* (options?: { MATCH?: string }) {
-      const match = options?.MATCH ?? "*";
-      const re = new RegExp(
-        `^${match.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
-      );
-      for (const key of strings.keys()) if (re.test(key)) yield key;
-    },
-    duplicate: () => client,
-    pSubscribe: async () => undefined,
-    disconnect: async () => undefined,
-  };
-  return { client: client as never, zAddCalls, zRemCalls };
+  );
 }
 
 describe("redis due-index zset maintenance (fake client)", () => {
+  const zset = (f: FakeRedis) => Object.fromEntries(f.zsets.get("ns:whk:due") ?? []);
+
   test("setItem on a due key mirrors it into the due zset at its due-time score", async () => {
-    const { client, zAddCalls } = fakeZsetClient();
-    const storage = createRedisStorage({ client, prefix: "ns" });
+    const f = fakeWithClaim();
+    const storage = createRedisStorage({ client: asRedisClient(f), prefix: "ns" });
     const millis = 1_720_000_000_000;
     const key = dueKey("acme", millis, "dlv_1");
     await storage.setItem(key, { app: "acme", deliveryId: "dlv_1" });
-    expect(zAddCalls).toEqual([{ key: "ns:whk:due", score: millis, value: key }]);
+    expect(zset(f)).toEqual({ [key]: millis });
   });
 
   test("setItem on a non-due key leaves the zset alone", async () => {
-    const { client, zAddCalls } = fakeZsetClient();
-    const storage = createRedisStorage({ client, prefix: "ns" });
+    const f = fakeWithClaim();
+    const storage = createRedisStorage({ client: asRedisClient(f), prefix: "ns" });
     await storage.setItem("whk/acme/deliveries/dlv_1", { id: "dlv_1" });
     await storage.setItem("whk/acme/metadata", { key: "acme" });
-    expect(zAddCalls).toEqual([]);
+    expect(f.zsets.size).toBe(0);
   });
 
   test("removeItem on a due key removes the zset member", async () => {
-    const { client, zRemCalls } = fakeZsetClient();
-    const storage = createRedisStorage({ client, prefix: "ns" });
+    const f = fakeWithClaim();
+    const storage = createRedisStorage({ client: asRedisClient(f), prefix: "ns" });
     const key = dueKey("acme", 1_720_000_000_000, "dlv_1");
     await storage.setItem(key, { app: "acme", deliveryId: "dlv_1" });
     await storage.removeItem(key);
-    expect(zRemCalls).toEqual([{ key: "ns:whk:due", member: key }]);
+    expect(zset(f)).toEqual({});
   });
 });
 

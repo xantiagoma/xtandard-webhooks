@@ -27,6 +27,7 @@ runStorageContractTests(
   },
   {
     t: { describe, test, expect },
+    capabilities: { compareAndSwap: true, watch: false },
     timeout: 60_000,
     seedLegacy: async (_storage, key, raw) => {
       await client.query(`INSERT INTO webhooks_kv (key, value) VALUES ($1, $2::jsonb)`, [key, raw]);

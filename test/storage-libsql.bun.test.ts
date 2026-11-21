@@ -51,6 +51,7 @@ runStorageContractTests(
   },
   {
     t: { describe, test, expect },
+    capabilities: { compareAndSwap: true, watch: false },
     seedLegacy: async (storage, key, raw) => {
       await storage.getKeys(""); // run the DDL
       await client.execute({

@@ -41,7 +41,11 @@ describe.skipIf(!available)("createMongoStorage (live)", () => {
       makers.push(storage);
       return storage;
     },
-    { t: { describe, test, expect }, timeout: 30_000 },
+    {
+      t: { describe, test, expect },
+      capabilities: { compareAndSwap: true, watch: false },
+      timeout: 30_000,
+    },
   );
 
   afterAll(async () => {

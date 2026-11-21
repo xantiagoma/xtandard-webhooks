@@ -6,7 +6,7 @@ import { runStorageContractTests } from "./storage-contract.ts";
 runStorageContractTests(
   "unstorage (memory driver)",
   () => createUnstorageStorage({ storage: createStorage() }),
-  { t: { describe, test, expect }, capabilities: { compareAndSwap: false } },
+  { t: { describe, test, expect }, capabilities: { compareAndSwap: false, watch: false } },
 );
 
 describe("createUnstorageStorage specifics", () => {

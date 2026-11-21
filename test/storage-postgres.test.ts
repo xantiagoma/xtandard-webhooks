@@ -14,6 +14,7 @@ runStorageContractTests(
   () => createPostgresStorage({ client: (pglite = new PGlite()) }),
   {
     t: { describe, test, expect },
+    capabilities: { compareAndSwap: true, watch: false },
     timeout: 60_000,
     seedLegacy: async (storage, key, raw) => {
       await storage.getKeys(""); // run the DDL
@@ -63,7 +64,11 @@ describe.skipIf(!process.env.POSTGRES_URL)("createPostgresStorage (live)", () =>
       opened.push(storage);
       return storage;
     },
-    { t: { describe, test, expect }, timeout: 30_000 },
+    {
+      t: { describe, test, expect },
+      capabilities: { compareAndSwap: true, watch: false },
+      timeout: 30_000,
+    },
   );
   afterAll(async () => {
     for (const storage of opened) {

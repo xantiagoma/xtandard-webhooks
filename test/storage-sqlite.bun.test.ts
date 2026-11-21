@@ -25,6 +25,7 @@ runStorageContractTests(
   },
   {
     t: { describe, test, expect },
+    capabilities: { compareAndSwap: true, watch: false },
     seedLegacy: async (storage, key, raw) => {
       await storage.getKeys(""); // run the DDL
       database.query("INSERT INTO xtandard_webhooks (key, value) VALUES (?, ?)").run(key, raw);

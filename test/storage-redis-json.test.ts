@@ -27,8 +27,28 @@ describe.skipIf(!REDIS_JSON_URL)("createRedisJSONStorage (live)", () => {
       opened.push(storage);
       return storage;
     },
-    { t: { describe, test, expect }, deliveryQueue: true, timeout: 30_000 },
+    {
+      t: { describe, test, expect },
+      capabilities: { compareAndSwap: true, watch: { settleMs: 150 } },
+      deliveryQueue: true,
+      timeout: 30_000,
+    },
   );
+
+  beforeAll(async () => {
+    // Keyspace notifications are off by default; the kit's watch cases need them.
+    const { createClient } = (await import("redis")) as unknown as {
+      createClient: (opts: Record<string, unknown>) => {
+        connect(): Promise<unknown>;
+        configSet(p: string, v: string): Promise<unknown>;
+        quit(): Promise<unknown>;
+      };
+    };
+    const cfg = createClient({ url: REDIS_JSON_URL });
+    await cfg.connect();
+    await cfg.configSet("notify-keyspace-events", "KEA");
+    await cfg.quit();
+  });
 
   describe("variants", () => {
     let storage: RedisWebhooksStorage;

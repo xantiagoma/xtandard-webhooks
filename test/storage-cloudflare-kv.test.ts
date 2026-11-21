@@ -39,7 +39,7 @@ function fakeKv(): KVNamespaceLike {
 runStorageContractTests(
   "cloudflare-kv (fake binding)",
   () => createCloudflareKvStorage({ namespace: fakeKv() }),
-  { t: { describe, test, expect }, capabilities: { compareAndSwap: false } },
+  { t: { describe, test, expect }, capabilities: { compareAndSwap: false, watch: false } },
 );
 
 describe("cloudflare-kv — prefix namespacing", () => {
