@@ -6,6 +6,6 @@
     "composite": true,
     "paths": { "elysia": ["../node_modules/elysia-v2"] }
   },
-  "include": ["../src/entry-elysia2.ts", "../scripts/vendor.d.ts"],
+  "include": ["../src/entry-elysia2.ts"],
   "exclude": ["../dist", "../node_modules"]
 }
