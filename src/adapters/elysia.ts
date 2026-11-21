@@ -42,6 +42,14 @@ const endpointParams = t.Object({ app: t.String(), id: t.String() });
 const nameParams = t.Object({ name: t.String() });
 
 /**
+ * The typed plugin {@link webhooksElysia} returns: an `Elysia` instance whose
+ * route table (every admin route with its params and body schema) is what Eden
+ * treaty infers from `typeof app`. Name it to type a variable or a factory that
+ * returns the plugin.
+ */
+export type WebhooksElysiaPlugin = ReturnType<typeof webhooksElysiaRoutes>;
+
+/**
  * Typed Elysia plugin exposing the admin API so the **Eden** client can call it
  * with full path/method/param typing (`edenClient.webhooks.api.applications.get()`).
  * Routes are declared for the typed surface; every handler delegates to the
@@ -50,7 +58,17 @@ const nameParams = t.Object({ name: t.String() });
  *
  * Elysia 1.x only — for Elysia 2 import from `@xtandard/webhooks/elysia2`.
  */
-export function webhooksElysia(options: WebhooksElysiaOptions) {
+export function webhooksElysia(options: WebhooksElysiaOptions): WebhooksElysiaPlugin {
+  return webhooksElysiaRoutes(options);
+}
+
+/**
+ * The route declarations behind {@link webhooksElysia}; its inferred type is
+ * {@link WebhooksElysiaPlugin}.
+ *
+ * @internal
+ */
+function webhooksElysiaRoutes(options: WebhooksElysiaOptions) {
   const { prefix, pass } = createPass(options);
 
   const app = "/api/applications/:app";

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `WebhooksElysiaPlugin` (from `@xtandard/webhooks/elysia` and `/elysia2`): the named return type of `webhooksElysia()`, the same type as before. The API reference now shows it instead of the flattened `Elysia<…, object & object & …>` generics.
+
+### Changed
+
+- `ElysiaWebhooksHandler` is now an interface with documented members (a call signature, `core`, `dispatcher`, `openapi()`); the type itself is unchanged.
+- Docs: the `/elysia2` API reference is generated against Elysia 2 and lists every symbol it exports, including the ones it shares with `/elysia`.
+
 ## v0.1.4
 
 Patch — the embedded React components now render in one theme and follow the host app.
