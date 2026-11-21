@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { run } from "../src/cli.ts";
 
 const REDIS_URL = process.env.REDIS_URL;
@@ -24,6 +26,7 @@ const DRIVER_ENV = [
   "QUEUE_PG_TABLE",
   "STORAGE_MONGO_COLLECTION",
   "QUEUE_MONGO_COLLECTION",
+  "STORAGE_FILE_DIR",
 ];
 
 beforeEach(() => {
@@ -51,6 +54,19 @@ describe("cli storage drivers", () => {
     // Guards against the driver env var being misread and silently falling
     // back to the file driver (which would write ./.webhooks in the cwd).
     if (!hadFileDir) expect(existsSync("./.webhooks")).toBe(false);
+  });
+
+  test("an unknown STORAGE_DRIVER is an error, not a silent file store (fixed)", async () => {
+    process.env.STORAGE_DRIVER = "postgress";
+    expect(await run(["init"])).toBe(1);
+    expect(err.join("")).toContain('Unknown STORAGE_DRIVER "postgress"');
+  });
+
+  test("an empty STORAGE_DRIVER means the default (fixed: it used to be read as a driver name)", async () => {
+    process.env.STORAGE_DRIVER = "";
+    process.env.STORAGE_FILE_DIR = mkdtempSync(join(tmpdir(), "wh-cli-"));
+    expect(await run(["init"])).toBe(0);
+    expect(existsSync(join(process.env.STORAGE_FILE_DIR, "whk"))).toBe(true);
   });
 
   test("split planes: QUEUE_STORAGE_DRIVER builds a second store", async () => {
