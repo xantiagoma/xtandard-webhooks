@@ -4,6 +4,7 @@ import { getTableName } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { text } from "drizzle-orm/pg-core";
 import { pgWebhooksTable } from "../src/drizzle/pg.ts";
+import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { mysqlWebhooksTable } from "../src/drizzle/mysql.ts";
 import { sqliteWebhooksTable } from "../src/drizzle/sqlite.ts";
 import { createDrizzleStorage } from "../src/storage/drizzle.ts";
@@ -64,6 +65,18 @@ describe("table factories — shape", () => {
       expect(t.key).toBeDefined();
       expect(t.value).toBeDefined();
     }
+  });
+
+  test("the MySQL key column is case- and accent-sensitive (utf8mb4_bin)", () => {
+    const key = getTableConfig(mysqlWebhooksTable("kv") as unknown as MySqlTable).columns.find(
+      (c) => c.name === "key",
+    )!;
+    expect(key.getSQLType()).toBe("varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin");
+    expect(key.primary).toBe(true);
+    const custom = getTableConfig(
+      mysqlWebhooksTable("kv", { keyLength: 191 }) as unknown as MySqlTable,
+    ).columns[0]!;
+    expect(custom.getSQLType()).toMatch(/^varchar\(191\) .*utf8mb4_bin$/);
   });
 
   test("the table name defaults to xtandard_webhooks", () => {

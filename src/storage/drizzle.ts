@@ -75,8 +75,12 @@ export interface DrizzleStorageOptions {
  */
 export type DrizzleWebhooksStorage = WebhooksStorage;
 
-/** Escape LIKE wildcards so `getKeys` matches the prefix verbatim (paired with `ESCAPE '\'`). */
-const escapeLike = (literal: string): string => literal.replace(/[\\%_]/g, (c) => `\\${c}`);
+/**
+ * Escape LIKE wildcards so `getKeys` matches the prefix verbatim (paired with
+ * `ESCAPE '!'`). Not a backslash: in MySQL `'\'` escapes the closing quote, so
+ * `ESCAPE '\'` is a syntax error there; `!` means the same on every dialect.
+ */
+const escapeLike = (literal: string): string => literal.replace(/[!%_]/g, (c) => `!${c}`);
 
 /** Parse a value defensively — Drizzle returns json parsed, but a string is parsed too. */
 const parseValue = <T>(value: unknown): T => {
@@ -133,8 +137,10 @@ export function createDrizzleStorage(options: DrizzleStorageOptions): DrizzleWeb
       const rows = (await db
         .select({ key: table.key })
         .from(table)
-        .where(sql`${table.key} like ${pattern} escape '\\'`)) as Array<{ key: unknown }>;
-      return rows.map((row) => String(row.key));
+        .where(sql`${table.key} like ${pattern} escape '!'`)) as Array<{ key: unknown }>;
+      // SQLite's LIKE folds ASCII case, and a non-binary MySQL/Postgres collation can fold
+      // case or accents: keep only exact (case-sensitive) prefix matches.
+      return rows.map((row) => String(row.key)).filter((key) => key.startsWith(prefix));
     },
   };
 }

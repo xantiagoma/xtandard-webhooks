@@ -33,6 +33,29 @@ Optional capabilities (separate interfaces + guards): `watch` (change notificati
 
 Conventions shared by every adapter (ported from `@xtandard/flags`): factories return `satisfies`-closed literals; `ownsClient = !options.client` — borrowed clients are never closed; optional peers load via lazy memoized dynamic `import()` with an actionable `requirePeer` error; `close()` exists only on owning adapters.
 
+### File storage: case-safe file names
+
+Keys are case-sensitive, but the default filesystems on macOS and Windows are not. `storage/file` therefore encodes each key segment into a reversible, case-safe file name: an uppercase letter becomes `^` + the letter (`Acme` → `^acme`), `^` becomes `^^`, and anything outside `[a-z0-9._~!@,=+_-]` becomes `%XX`. Stores written by v0.1.4 or earlier used raw segments. Migrate them once, with no writer running:
+
+```ts
+import { migrateFileStorage } from "@xtandard/webhooks/storage/file";
+
+await migrateFileStorage({ dir: "./data/webhooks" }); // → { moved: n }; idempotent
+```
+
+Until you migrate, files in the old layout are ignored, and `getKeys` logs a warning once. Keys that the old layout had already merged on a case-insensitive filesystem stay merged.
+
+### MySQL (Drizzle): a case-sensitive key column
+
+Keys are case-sensitive: `whk/Acme/…` and `whk/acme/…` are different applications. MySQL's default collation (`utf8mb4_0900_ai_ci`) is case- and accent-insensitive, so `mysqlWebhooksTable()` declares the `key` column with `utf8mb4_bin`. If your table was created from an earlier version (any release up to and including v0.1.4), re-collate the column:
+
+```sql
+ALTER TABLE xtandard_webhooks
+  MODIFY `key` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+```
+
+Use your table name and `keyLength` (default `512`). The old primary key never held two keys that differ only by case or accent, so the `ALTER` cannot fail on duplicates. It does not split data that was already merged: writes for both spellings went to one row (under the first spelling written), and only applications whose keys differ by case alone were affected.
+
 ## The key model
 
 Root `whk`, slash-delimited, application-namespaced — see the module doc in `src/keys.ts` for the full layout. The load-bearing entry is the **due index**:

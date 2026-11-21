@@ -42,10 +42,23 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: webhooks
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       REDIS_URL: redis://localhost:6379
       MONGO_URL: mongodb://localhost:27017
       POSTGRES_URL: postgres://postgres:postgres@localhost:5432/webhooks
+      MYSQL_URL: mysql://root:root@127.0.0.1:3306/webhooks
     steps:
       - uses: actions/checkout@v4
 
@@ -68,7 +81,7 @@ jobs:
       - name: Format check
         run: bun run format:check
 
-      - name: Test + coverage (live Redis/Mongo/Postgres; enforces thresholds)
+      - name: Test + coverage (live Redis/Mongo/Postgres/MySQL; enforces thresholds)
         run: bun run test:coverage
 
       - name: Test (bun:sqlite, native bun test)

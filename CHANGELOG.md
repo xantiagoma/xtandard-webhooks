@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed
+
+- **File storage: keys that differ only by case shared a file on macOS and Windows** (their default filesystems are case-insensitive), so applications such as `Acme` and `acme`, or ids differing only by case, overwrote each other. Each key segment is now encoded into a case-safe, reversible file name (`Acme` → `^acme`; characters outside `[a-z0-9._~!@,=+_-]` → `%XX`). **Existing file stores need a one-time migration**: run `migrateFileStorage({ dir })` from `@xtandard/webhooks/storage/file` once, with no writer running. Until then, files in the old layout are ignored, and `getKeys` logs a warning once.
+- **unstorage storage: distinct keys collided.** unstorage normalizes keys: it cuts at `?`, turns `\` and `:` into separators, and collapses repeats. The adapter now escapes `%`, `?`, `\` and `:` losslessly, and `getKeys` honours plain string prefixes that end mid-segment. Keys already stored that contain `%` (rare) are read under their escaped form.
+- **Redis storage: `getKeys` treated `*`, `?`, `[`, `]` in the prefix as glob patterns.** They are now escaped in `SCAN MATCH`.
+- **SQL storages (`sqlite`, `libsql`, `postgres`, Drizzle): `getKeys` could return keys that differ from the prefix by case.** SQLite's `LIKE` folds ASCII case, and a non-binary collation can fold case or accents. Results are now filtered to exact, case-sensitive prefix matches.
+- **Drizzle storage on MySQL: `getKeys` was a syntax error.** It used `LIKE … ESCAPE '\'`; in MySQL the backslash escapes the closing quote. It now uses `ESCAPE '!'`, which works on every dialect. Prefixes containing `%`, `_` or `!` match literally.
+- **Drizzle storage on MySQL: keys that differ only by case or accent collided.** `mysqlWebhooksTable()` now declares the `key` column with `utf8mb4_bin` (MySQL's default `utf8mb4_0900_ai_ci` folds case and accents), so `whk/Acme/…` and `whk/acme/…` are separate keys. **Existing tables need a one-time `ALTER TABLE`**: see [MySQL (Drizzle): a case-sensitive key column](docs/STORAGE.md#mysql-drizzle-a-case-sensitive-key-column).
+
 ### Added
 
 - `WebhooksElysiaPlugin` (from `@xtandard/webhooks/elysia` and `/elysia2`): the named return type of `webhooksElysia()`, the same type as before. The API reference now shows it instead of the flattened `Elysia<…, object & object & …>` generics.

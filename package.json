@@ -438,6 +438,7 @@
     "husky": "^9.1.7",
     "lucide-react": "^1.22",
     "mongodb": "^6.10.0",
+    "mysql2": "^3.24.6",
     "pg": "^8.13.0",
     "playwright": "^1.49.0",
     "postcss": "^8.5.16",

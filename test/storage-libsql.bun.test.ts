@@ -85,6 +85,40 @@ describe("libsql storage (bun:sqlite-backed fake client)", () => {
     expect(await storage.getKeys("whk/none/")).toEqual([]);
   });
 
+  test("getKeys is case-exact and matches % _ ! \\ * ? [ ] literally", async () => {
+    // SQLite's LIKE folds ASCII case, so `whk/acme/` would also match `whk/Acme/…`.
+    const storage = make();
+    const keys = [
+      "whk/Acme/a",
+      "whk/acme/a",
+      "whk/ACME/a",
+      "whk/a%b/1",
+      "whk/aXb/1",
+      "whk/a_b/1",
+      "whk/a!b/1",
+      "whk/a\\b/1",
+      "whk/a*b/1",
+      "whk/a?b/1",
+      "whk/a[b]/1",
+      "whk/a:b/1",
+    ];
+    for (const key of keys) await storage.setItem(key, { key });
+    expect(await storage.getKeys("whk/acme/")).toEqual(["whk/acme/a"]);
+    expect(await storage.getKeys("whk/Acme/")).toEqual(["whk/Acme/a"]);
+    expect(await storage.getItem("whk/ACME/a")).toEqual({ key: "whk/ACME/a" });
+    for (const prefix of [
+      "whk/a%b/",
+      "whk/a_b/",
+      "whk/a!b/",
+      "whk/a\\b/",
+      "whk/a*b/",
+      "whk/a?b/",
+      "whk/a[b]/",
+      "whk/a:b/",
+    ])
+      expect(await storage.getKeys(prefix)).toEqual([`${prefix}1`]);
+  });
+
   test("rejects unsafe table names", () => {
     expect(() => createLibsqlStorage({ client: fakeLibsqlClient(), table: "bad; drop" })).toThrow();
   });

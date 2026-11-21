@@ -117,6 +117,90 @@ export function runStorageContractTests(
       expect(await storage.getKeys("whk/app2/")).toEqual(["whk/app2/b"]);
     });
 
+    test("keys that differ only by case (or accent) are distinct", async () => {
+      // MySQL's default collation is case- and accent-insensitive; the key column must not be.
+      const storage = await makeStorage();
+      await storage.setItem("whk/Acme/metadata", { v: "upper" });
+      await storage.setItem("whk/acme/metadata", { v: "lower" });
+      await storage.setItem("whk/acmé/metadata", { v: "accent" });
+      expect(await storage.getItem("whk/Acme/metadata")).toEqual({ v: "upper" });
+      expect(await storage.getItem("whk/acme/metadata")).toEqual({ v: "lower" });
+      expect(await storage.getItem("whk/acmé/metadata")).toEqual({ v: "accent" });
+      expect(await storage.getKeys("whk/acme/")).toEqual(["whk/acme/metadata"]);
+      expect(await storage.getKeys("whk/Acme/")).toEqual(["whk/Acme/metadata"]);
+      await storage.removeItem("whk/acme/metadata");
+      expect(await storage.getItem("whk/Acme/metadata")).toEqual({ v: "upper" });
+    });
+
+    test("getKeys matches % _ ! * [ ] ? \\ in the prefix literally", async () => {
+      // LIKE wildcards (% _), the LIKE escape (!), glob metacharacters (* [ ] ?), and the
+      // characters key-normalizing backends rewrite (? \\).
+      const storage = await makeStorage();
+      const keys = [
+        "whk/a%b/1",
+        "whk/a_b/1",
+        "whk/a!b/1",
+        "whk/a!!b/1",
+        "whk/a*b/1",
+        "whk/a[b]/1",
+        "whk/a?b/1",
+        "whk/a\\b/1",
+        "whk/a]b/1",
+        "whk/aXb/1",
+        "whk/a-b/1",
+        "whk/ab/1",
+      ];
+      for (const key of keys) await storage.setItem(key, { key });
+      for (const prefix of ["whk/a%b/", "whk/a_b/", "whk/a!b/", "whk/a!!b/", "whk/a*b/"])
+        expect(await storage.getKeys(prefix)).toEqual([`${prefix}1`]);
+      expect(await storage.getKeys("whk/a[b]/")).toEqual(["whk/a[b]/1"]);
+      expect(await storage.getKeys("whk/a?b/")).toEqual(["whk/a?b/1"]);
+      expect(await storage.getKeys("whk/a\\b/")).toEqual(["whk/a\\b/1"]);
+      expect(await storage.getKeys("whk/a]b/")).toEqual(["whk/a]b/1"]);
+      // Prefixes that end mid-segment, before an escaped character (`%` → `%25`).
+      expect(await storage.getKeys("whk/a[")).toEqual(["whk/a[b]/1"]);
+      expect(await storage.getKeys("whk/a%")).toEqual(["whk/a%b/1"]);
+      expect(await storage.getKeys("whk/a\\")).toEqual(["whk/a\\b/1"]);
+      expect((await storage.getKeys("whk/a")).sort()).toEqual([...keys].sort());
+    });
+
+    test("keys with ? \\ ] : % %25 round-trip exactly and stay distinct", async () => {
+      // unstorage normalizes keys (cuts at `?`, maps `\\` and `:` to separators).
+      const storage = await makeStorage();
+      const keys = [
+        "whk/q?x/a",
+        "whk/q/a",
+        "whk/b\\s/a",
+        "whk/b/s/a",
+        "whk/b:s/a",
+        "whk/p%3F/a",
+        "whk/p%25/a",
+        "whk/p%/a",
+        "whk/r]/a",
+      ];
+      for (const key of keys) await storage.setItem(key, { key });
+      for (const key of keys) expect(await storage.getItem(key)).toEqual({ key });
+      expect((await storage.getKeys("whk/")).sort()).toEqual([...keys].sort());
+      expect((await storage.getKeys("whk/p%")).sort()).toEqual([
+        "whk/p%/a",
+        "whk/p%25/a",
+        "whk/p%3F/a",
+      ]);
+      await storage.removeItem("whk/q?x/a");
+      expect(await storage.getItem("whk/q/a")).toEqual({ key: "whk/q/a" });
+    });
+
+    test("tenants (applications) that differ only by case are isolated", async () => {
+      const storage = await makeStorage();
+      await storage.setItem("whk/Acme/endpoints/ep_1", { app: "Acme" });
+      await storage.setItem("whk/acme/endpoints/ep_1", { app: "acme" });
+      await storage.setItem("whk/ACME/endpoints/ep_2", { app: "ACME" });
+      expect(await storage.getKeys("whk/Acme/")).toEqual(["whk/Acme/endpoints/ep_1"]);
+      expect(await storage.getKeys("whk/acme/")).toEqual(["whk/acme/endpoints/ep_1"]);
+      expect(await storage.getKeys("whk/ACME/")).toEqual(["whk/ACME/endpoints/ep_2"]);
+      expect(await storage.getItem("whk/acme/endpoints/ep_1")).toEqual({ app: "acme" });
+    });
+
     test("getKeys returns an empty array when nothing matches", async () => {
       const storage = await makeStorage();
       await storage.setItem("whk/acme/a", { v: 1 });

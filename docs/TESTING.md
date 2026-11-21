@@ -50,14 +50,14 @@ No timers, no sleeps, no network flakiness: the dispatcher's `tick()` exists pre
 
 ## How this repo is tested
 
-| Layer               | Where                                               | Notes                                                                            |
-| ------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------- |
-| unit + integration  | `test/*.test.ts` via `vp test run` (vitest)         | flat dir; `retry: 2` absorbs live-backend scheduling flakes                      |
-| Bun-runtime-only    | `test/*.bun.test.ts` via `bun test`                 | `bun:sqlite`, libsql, CLI serve                                                  |
-| storage conformance | `test/storage-contract.ts`                          | one battery, every adapter; incl. due-index ordering + `claimDue` semantics      |
-| live backends       | env-gated: `REDIS_URL`, `POSTGRES_URL`, `MONGO_URL` | always-on locally via pglite for postgres/drizzle-pg; CI runs service containers |
-| browser e2e         | `e2e/` via Playwright                               | boots the standalone app with the built UI                                       |
-| coverage            | `vp test run --coverage`, thresholds 92/85/90/92    | enforced in CI only                                                              |
+| Layer               | Where                                                            | Notes                                                                            |
+| ------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| unit + integration  | `test/*.test.ts` via `vp test run` (vitest)                      | flat dir; `retry: 2` absorbs live-backend scheduling flakes                      |
+| Bun-runtime-only    | `test/*.bun.test.ts` via `bun test`                              | `bun:sqlite`, libsql, CLI serve                                                  |
+| storage conformance | `test/storage-contract.ts`                                       | one battery, every adapter; incl. due-index ordering + `claimDue` semantics      |
+| live backends       | env-gated: `REDIS_URL`, `POSTGRES_URL`, `MONGO_URL`, `MYSQL_URL` | always-on locally via pglite for postgres/drizzle-pg; CI runs service containers |
+| browser e2e         | `e2e/` via Playwright                                            | boots the standalone app with the built UI                                       |
+| coverage            | `vp test run --coverage`, thresholds 92/85/90/92                 | enforced in CI only                                                              |
 
 Conventions worth copying:
 

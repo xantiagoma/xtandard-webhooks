@@ -5,6 +5,12 @@
  * Base columns: `key varchar PRIMARY KEY` (length configurable), `value json
  * NOT NULL`. `extraColumns`/`extraIndexes` mirror `drizzle-audit`.
  *
+ * The `key` column uses the **`utf8mb4_bin`** collation: MySQL's default
+ * (`utf8mb4_0900_ai_ci`) is case- and accent-insensitive, so keys such as
+ * `…/Acme/…` and `…/acme/…` would be the same primary key. Tables created
+ * from an earlier version need their `key` column re-collated; docs/STORAGE.md
+ * has the `ALTER TABLE`.
+ *
  * @example
  * ```ts
  * import { mysqlWebhooksTable } from "@xtandard/webhooks/drizzle/mysql";
@@ -16,9 +22,9 @@
 
 import type { BuildColumns } from "drizzle-orm";
 import {
+  customType,
   json,
   mysqlTable,
-  varchar,
   type MySqlColumnBuilderBase,
   type MySqlTableExtraConfigValue,
 } from "drizzle-orm/mysql-core";
@@ -42,16 +48,22 @@ export interface MysqlWebhooksTableOptions {
   extraIndexes?: (table: MysqlWebhooksColumns) => MySqlTableExtraConfigValue[];
 }
 
+/** A case- and accent-sensitive (`utf8mb4_bin`) `varchar(length)`. */
+const binVarchar = (name: string, length: number) =>
+  customType<{ data: string }>({
+    dataType: () => `varchar(${length}) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`,
+  })(name);
+
 /**
  * Build the MySQL `mysqlTable` for the webhooks KV store: `key varchar PRIMARY
- * KEY`, `value json NOT NULL`. The table name defaults to `"xtandard_webhooks"`.
+ * KEY` (`utf8mb4_bin`), `value json NOT NULL`. The table name defaults to `"xtandard_webhooks"`.
  */
 export function mysqlWebhooksTable(
   name = "xtandard_webhooks",
   opts?: MysqlWebhooksTableOptions,
 ): DrizzleKvTable {
   const columns = {
-    key: varchar("key", { length: opts?.keyLength ?? 512 }).primaryKey(),
+    key: binVarchar("key", opts?.keyLength ?? 512).primaryKey(),
     value: json("value").notNull(),
     ...opts?.extraColumns?.(),
   };
