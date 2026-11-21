@@ -218,6 +218,7 @@ export const sidebar: Item[] = [
         })),
       },
       { slug: "project/releases", src: "docs/RELEASES.md", label: "Releases", internal: true },
+      { slug: "project/brand", src: "docs/BRAND.md", label: "Brand", internal: true },
       { label: "npm", link: npmUrl },
     ],
   },

@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/logo-256.png" alt="@xtandard/webhooks" width="128" height="128" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/lockup-horizontal-dark.png" />
+  <img src="https://raw.githubusercontent.com/xantiagoma/xtandard-webhooks/main/docs/assets/lockup-horizontal-light.png" alt="xtandard-webhooks" width="420" />
+</picture>
 
 # @xtandard/webhooks
 

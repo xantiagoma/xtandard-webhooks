@@ -46,6 +46,9 @@ const apiOwners = ["src/schema.ts", "src/signing.ts", "src/core.ts", "src/index.
 
 const typedocPlugin = new URL("./scripts/typedoc-plugin.ts", import.meta.url);
 
+/** Absolute URL of the social card, for og:image / twitter:image. */
+const socialImage = `${siteOrigin}${siteBase}/social.png`;
+
 const [apiReference, apiSidebarGroup] = createStarlightTypeDocPlugin();
 
 export default defineConfig({
@@ -60,8 +63,28 @@ export default defineConfig({
       title: packageName,
       description:
         "Self-hosted, embeddable, Standard Webhooks-compliant outbound webhooks: a Svix alternative as a library.",
-      logo: { src: "../docs/assets/logo-256.png", alt: "xtandard webhooks" },
-      favicon: "/favicon.png",
+      // The brand lockups (docs/BRAND.md): ink wordmark on light, paper wordmark on dark.
+      logo: {
+        light: "../docs/assets/lockup-horizontal-light.svg",
+        dark: "../docs/assets/lockup-horizontal-dark.svg",
+        alt: packageName,
+        replacesTitle: true,
+      },
+      favicon: "/favicon.svg",
+      head: [
+        { tag: "link", attrs: { rel: "icon", href: `${siteBase}/favicon.ico`, sizes: "32x32" } },
+        {
+          tag: "link",
+          attrs: { rel: "apple-touch-icon", href: `${siteBase}/apple-touch-icon.png` },
+        },
+        { tag: "meta", attrs: { name: "theme-color", content: "#0f1215" } },
+        // The social card (docs/assets/social.png, copied to public/ by scripts/brand-assets.sh).
+        { tag: "meta", attrs: { property: "og:image", content: socialImage } },
+        { tag: "meta", attrs: { property: "og:image:width", content: "1280" } },
+        { tag: "meta", attrs: { property: "og:image:height", content: "640" } },
+        { tag: "meta", attrs: { name: "twitter:card", content: "summary_large_image" } },
+        { tag: "meta", attrs: { name: "twitter:image", content: socialImage } },
+      ],
       social: [
         { icon: "github", label: "GitHub", href: repoUrl },
         { icon: "npm", label: "npm", href: npmUrl },

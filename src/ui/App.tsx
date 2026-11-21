@@ -59,6 +59,7 @@ export function App({
   logoUrl,
   initialApplicationKey,
   showThemeToggle = true,
+  showBrandMark = false,
 }: {
   locationHook?: BaseLocationHook;
   base?: string;
@@ -68,6 +69,11 @@ export function App({
   initialApplicationKey?: string;
   /** Show the system/light/dark switcher. Off when an embedding host owns the theme. */
   showThemeToggle?: boolean;
+  /**
+   * Show the xtandard mark (`symbol.svg`, served next to the bundle) before the default
+   * title. The standalone SPA only: an embed lives in the host's branding.
+   */
+  showBrandMark?: boolean;
 }): React.ReactElement {
   return (
     <Router hook={locationHook ?? useHashLocation} base={base}>
@@ -75,6 +81,7 @@ export function App({
         logoUrl={logoUrl}
         initialApplicationKey={initialApplicationKey}
         showThemeToggle={showThemeToggle}
+        showBrandMark={showBrandMark}
       />
     </Router>
   );
@@ -84,10 +91,12 @@ function AppShell({
   logoUrl,
   initialApplicationKey,
   showThemeToggle,
+  showBrandMark,
 }: {
   logoUrl?: string;
   initialApplicationKey?: string;
   showThemeToggle: boolean;
+  showBrandMark: boolean;
 }) {
   const bootstrap = getBootstrap();
   const toast = useToast();
@@ -170,7 +179,8 @@ function AppShell({
       <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
           {/* Brand: a configured logoUrl shows as the logo; otherwise the title
-              wordmark. No default icon. */}
+              wordmark. The xtandard mark only precedes the default title of the
+              standalone admin: a custom title, a logo or the portal stay unbranded. */}
           <div className="flex items-center gap-2 shrink-0">
             {brandLogoUrl ? (
               <img
@@ -179,7 +189,12 @@ function AppShell({
                 className="h-7 max-w-[320px] object-contain"
               />
             ) : (
-              <span className="text-sm font-semibold tracking-tight">{brandTitle}</span>
+              <>
+                {showBrandMark && !portal && brandTitle === "@xtandard/webhooks" && (
+                  <img src="symbol.svg" alt="" aria-hidden="true" className="h-5 w-auto" />
+                )}
+                <span className="text-sm font-semibold tracking-tight">{brandTitle}</span>
+              </>
             )}
           </div>
 
