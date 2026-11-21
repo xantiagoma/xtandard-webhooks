@@ -6,14 +6,21 @@
  * @module
  */
 
+import type { WebhooksCore } from "../core.ts";
+import type { Dispatcher } from "../dispatcher.ts";
 import { createFetchHandler, type WebhooksPanelOptions } from "../server/create-fetch-handler.ts";
 
 /** A web-standard fetch handler with `core` + `dispatcher` + `openapi()` attached. */
-export type ElysiaWebhooksHandler = ((request: Request) => Promise<Response>) & {
-  core: ReturnType<typeof createFetchHandler>["core"];
-  dispatcher: ReturnType<typeof createFetchHandler>["dispatcher"];
-  openapi: ReturnType<typeof createFetchHandler>["openapi"];
-};
+export interface ElysiaWebhooksHandler {
+  /** Handle a request (what `Elysia.mount(path, handler)` calls). */
+  (request: Request): Promise<Response>;
+  /** The underlying core (handy for `publish()`, tests, CLI, and standalone wiring). */
+  core: WebhooksCore;
+  /** The started dispatcher, or `null` when `dispatcher: false`. */
+  dispatcher: Dispatcher | null;
+  /** The admin API as an OpenAPI 3.1 document (also served at `{basePath}/api/openapi.json`). */
+  openapi(): Record<string, unknown>;
+}
 
 /** Create a panel handler suitable for `Elysia.mount(path, handler)`. */
 export function webhooksPanel(options: WebhooksPanelOptions): ElysiaWebhooksHandler {

@@ -3,9 +3,9 @@
 // description) and /api/<module>/ (that entry point's members, grouped by kind, with summaries).
 // The description is the `@module` doc comment at the top of each entry file (src/index.ts,
 // src/core.ts, src/entry-*.ts…), so it is written once, next to the code.
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { StarlightPlugin } from "@astrojs/starlight/types";
+import type { HookParameters, StarlightPlugin } from "@astrojs/starlight/types";
 import { entries, packageName, repoRoot, repoUrl, rootModule, siteBase } from "../manifest.ts";
 
 const kinds = [
@@ -169,7 +169,8 @@ function indexPage(modules: Module[]): string {
     "types. Each entry point is a separate import; storage adapters, framework adapters and the React",
     "embeds have **optional peer dependencies**, installed only when you use them. A symbol that",
     "several entry points export (the root re-exports `/core`, `/schema` and `/signing`) is documented",
-    `once, under the entry point it comes from. See also [Subpath exports](${siteBase}/guides/subpath-exports/).`,
+    "once, under the entry point it comes from; `/elysia2` lists its whole surface, built against Elysia 2.",
+    `See also [Subpath exports](${siteBase}/guides/subpath-exports/).`,
     "",
     "| Import | Exports | Description |",
     "| --- | --- | --- |",
@@ -184,17 +185,66 @@ function indexPage(modules: Module[]): string {
   return out.join("\n");
 }
 
-export function apiOverviews(): StarlightPlugin {
+/** An entry point TypeDoc documented in a program of its own, under content/docs/<output>/. */
+export type SeparateApi = { module: string; output: string };
+
+type Sidebar = NonNullable<HookParameters<"config:setup">["config"]["sidebar"]>;
+type SidebarItem = Sidebar[number];
+const isGroup = (i: SidebarItem): i is Extract<SidebarItem, { items: unknown }> =>
+  typeof i === "object" && "items" in i;
+
+/** Every Markdown file under `dir`. */
+const markdownFiles = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true, recursive: true })
+    .filter((e) => e.isFile() && e.name.endsWith(".md"))
+    .map((e) => join(e.parentPath, e.name));
+
+/**
+ * Move a separately generated entry point to /api/<module>/, where the main program would have put
+ * it: its pages, the links between them, and its sidebar group (into the API reference group,
+ * after the module it sorts after).
+ */
+function relocate(docsDir: string, api: SeparateApi, sidebar: Sidebar): Sidebar {
+  const from = join(docsDir, api.output);
+  const to = join(docsDir, "api", api.module);
+  rmSync(to, { recursive: true, force: true });
+  renameSync(from, to);
+  rmSync(join(to, "README.md"), { force: true });
+  const rewrite = (text: string) =>
+    text.replaceAll(`${siteBase}/${api.output}/`, `${siteBase}/api/${api.module}/`);
+  for (const file of markdownFiles(to)) writeFileSync(file, rewrite(readFileSync(file, "utf8")));
+
+  const group = sidebar.find((i) => isGroup(i) && i.label === api.module);
+  if (!group) return sidebar;
+  const moved = JSON.parse(
+    JSON.stringify(group).replaceAll(`${api.output}/`, `api/${api.module}/`),
+  ) as SidebarItem;
+  return sidebar
+    .filter((i) => i !== group)
+    .map((i) => {
+      if (!isGroup(i) || i.label !== "API reference") return i;
+      const items = [...i.items];
+      const at = items.findIndex((m) => isGroup(m) && m.label.localeCompare(api.module) > 0);
+      items.splice(at < 0 ? items.length : at, 0, moved);
+      return { ...i, items };
+    });
+}
+
+export function apiOverviews(separate: SeparateApi[] = []): StarlightPlugin {
   return {
     name: "xtandard-webhooks-api-overviews",
     hooks: {
-      "config:setup"({ astroConfig, command, logger }) {
+      "config:setup"({ astroConfig, command, config, logger, updateConfig }) {
         if (command === "preview") return;
-        const apiDir = join(new URL(astroConfig.srcDir).pathname, "content/docs/api");
+        const docsDir = join(new URL(astroConfig.srcDir).pathname, "content/docs");
+        const apiDir = join(docsDir, "api");
         if (!existsSync(apiDir)) {
           logger.warn("no generated API reference to index");
           return;
         }
+        let sidebar = config.sidebar ?? [];
+        for (const api of separate) sidebar = relocate(docsDir, api, sidebar);
+        updateConfig({ sidebar });
         const modules = collect(apiDir);
         for (const m of modules) writeFileSync(join(apiDir, m.name, "index.md"), modulePage(m));
         writeFileSync(join(apiDir, "index.md"), indexPage(modules));

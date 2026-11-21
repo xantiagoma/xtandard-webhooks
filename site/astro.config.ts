@@ -7,7 +7,7 @@ import starlight from "@astrojs/starlight";
 import mermaid from "astro-mermaid";
 import { defineConfig } from "astro/config";
 import starlightLinksValidator from "starlight-links-validator";
-import { createStarlightTypeDocPlugin } from "starlight-typedoc";
+import { createStarlightTypeDocPlugin, type StarlightTypeDocOptions } from "starlight-typedoc";
 import { apiOverviews } from "./scripts/api-overviews.ts";
 import {
   entries,
@@ -43,7 +43,44 @@ const toSidebar = (items: Item[]): SidebarItem[] =>
  */
 const apiOwners = ["src/schema.ts", "src/signing.ts", "src/core.ts", "src/index.ts"];
 
+/**
+ * Entry points documented by a TypeDoc program of their own, then moved under /api/<module>/ (see
+ * scripts/api-overviews.ts). `/elysia2` imports plain `elysia`, which the main program resolves to
+ * Elysia 1; its own program resolves it to Elysia 2. It also lists the symbols it shares with
+ * `/elysia` (`webhooksPanel`…), which the main program would document only once.
+ */
+const separateApis = [
+  {
+    module: "elysia2",
+    source: "src/entry-elysia2.ts",
+    tsconfig: "./tsconfig.typedoc.elysia2.json",
+  },
+].map((api) => {
+  const [plugin, sidebarGroup] = createStarlightTypeDocPlugin();
+  return { ...api, output: `api-${api.module}`, plugin, sidebarGroup };
+});
+
 const [apiReference, apiSidebarGroup] = createStarlightTypeDocPlugin();
+
+/** The TypeDoc options every program shares. */
+const typeDocBase: NonNullable<StarlightTypeDocOptions["typeDoc"]> = {
+  plugin: [join(import.meta.dirname, "scripts/typedoc-declared-return-types.ts")],
+  excludePrivate: true,
+  excludeInternal: true,
+  excludeExternals: true,
+  disableGit: true,
+  // `bun run typecheck` (CI) type-checks the project, tests included. TypeDoc only reads
+  // src/, and its own check of the whole program would trip on test-only imports.
+  skipErrorChecking: true,
+  // {path} is relative to src/ (the entry points' common directory).
+  sourceLinkTemplate: `${repoUrl}/blob/main/src/{path}#L{line}`,
+  useCodeBlocks: true,
+  parametersFormat: "table",
+  interfacePropertiesFormat: "table",
+  classPropertiesFormat: "table",
+  typeDeclarationFormat: "table",
+  enumMembersFormat: "table",
+};
 
 export default defineConfig({
   site: siteOrigin,
@@ -70,6 +107,8 @@ export default defineConfig({
       sidebar: [
         ...toSidebar(sidebar).slice(0, -1),
         apiSidebarGroup,
+        // Moved into the API reference group by apiOverviews().
+        ...separateApis.map((api) => api.sidebarGroup),
         ...toSidebar(sidebar).slice(-1),
       ],
       plugins: [
@@ -81,36 +120,32 @@ export default defineConfig({
             ...apiOwners,
             ...entries()
               .map((e) => e.source)
-              .filter((f) => !apiOwners.includes(f))
+              .filter((f) => !apiOwners.includes(f) && !separateApis.some((a) => a.source === f))
               .sort(),
           ].map((f) => join(repoRoot, f)),
-          // The library's tsconfig over all of src/, the Elysia 2 adapter included.
+          // The library's tsconfig over all of src/.
           tsconfig: "./tsconfig.typedoc.json",
           output: "api",
           sidebar: { label: "API reference", collapsed: true },
           typeDoc: {
-            plugin: ["typedoc-plugin-missing-exports"],
+            ...typeDocBase,
+            plugin: [...(typeDocBase.plugin ?? []), "typedoc-plugin-missing-exports"],
             // @ts-expect-error -- typedoc-plugin-missing-exports options
             placeInternalsInOwningModule: true,
-            excludePrivate: true,
-            excludeInternal: true,
-            excludeExternals: true,
-            disableGit: true,
-            // `bun run typecheck` (CI) type-checks the project, tests included. TypeDoc only reads
-            // src/, and its own check of the whole program would trip on test-only imports.
-            skipErrorChecking: true,
-            // {path} is relative to src/ (the entry points' common directory).
-            sourceLinkTemplate: `${repoUrl}/blob/main/src/{path}#L{line}`,
-            useCodeBlocks: true,
-            parametersFormat: "table",
-            interfacePropertiesFormat: "table",
-            classPropertiesFormat: "table",
-            typeDeclarationFormat: "table",
-            enumMembersFormat: "table",
           },
         }),
+        ...separateApis.map((api) =>
+          api.plugin({
+            entryPoints: [join(repoRoot, api.source)],
+            tsconfig: api.tsconfig,
+            output: api.output,
+            sidebar: { label: api.module, collapsed: true },
+            // typedoc-plugin-missing-exports loads once per process (the main program has it).
+            typeDoc: { ...typeDocBase },
+          }),
+        ),
         // After starlight-typedoc (plugins run in order): the /api/ and /api/<module>/ pages.
-        apiOverviews(),
+        apiOverviews(separateApis.map(({ module, output }) => ({ module, output }))),
         starlightLinksValidator({
           errorOnRelativeLinks: false,
           errorOnInvalidHashes: true,
