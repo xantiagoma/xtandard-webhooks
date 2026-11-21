@@ -2,8 +2,8 @@
  * Tests the libSQL/Turso adapter's logic against a **real SQL engine** without
  * needing Turso credentials or the `@libsql/client` package: a tiny fake client
  * implementing {@link LibsqlClientLike} backed by `bun:sqlite` runs the exact SQL
- * the adapter emits (CREATE / INSERT … ON CONFLICT / SELECT / DELETE / LIKE
- * ESCAPE). It uses `bun:sqlite`, so it runs via `bun test`, not vitest.
+ * the adapter emits (CREATE / INSERT … ON CONFLICT / SELECT / DELETE / GLOB /
+ * UPDATE … RETURNING). It uses `bun:sqlite`, so it runs via `bun test`, not vitest.
  *
  *   bun test test/storage-libsql.bun.test.ts
  */
@@ -14,6 +14,7 @@ import {
   type LibsqlClientLike,
   type LibsqlWebhooksStorage,
 } from "../src/storage/libsql.ts";
+import { runStorageContractTests } from "./storage-contract.ts";
 
 /** A `@libsql/client`-shaped client backed by an in-memory `bun:sqlite` database. */
 function fakeLibsqlClient(): LibsqlClientLike {
@@ -24,12 +25,9 @@ function fakeLibsqlClient(): LibsqlClientLike {
         db.run(stmt);
         return { rows: [] };
       }
+      // `all` also returns the rows of `UPDATE … RETURNING` (the compare-and-swap).
       const { sql, args } = stmt;
-      if (/^\s*select/i.test(sql)) {
-        return { rows: db.query(sql).all(...(args as never[])) as Array<Record<string, unknown>> };
-      }
-      db.query(sql).run(...(args as never[]));
-      return { rows: [] };
+      return { rows: db.query(sql).all(...(args as never[])) as Array<Record<string, unknown>> };
     },
     close() {
       db.close();
@@ -38,93 +36,41 @@ function fakeLibsqlClient(): LibsqlClientLike {
 }
 
 const open: LibsqlWebhooksStorage[] = [];
-const make = (): LibsqlWebhooksStorage => {
-  const storage = createLibsqlStorage({ client: fakeLibsqlClient() });
-  open.push(storage);
-  return storage;
-};
-
 afterEach(() => {
   for (const s of open.splice(0)) s.close();
 });
 
-describe("libsql storage (bun:sqlite-backed fake client)", () => {
-  test("returns null for a missing key", async () => {
-    expect(await make().getItem("whk/acme/missing")).toBeNull();
-  });
+let client = fakeLibsqlClient();
+runStorageContractTests(
+  "libsql (bun:sqlite-backed fake client)",
+  () => {
+    client = fakeLibsqlClient();
+    const storage = createLibsqlStorage({ client });
+    open.push(storage);
+    return storage;
+  },
+  {
+    t: { describe, test, expect },
+    seedLegacy: async (storage, key, raw) => {
+      await storage.getKeys(""); // run the DDL
+      await client.execute({
+        sql: "INSERT INTO xtandard_webhooks (key, value) VALUES (?, ?)",
+        args: [key, raw],
+      });
+    },
+  },
+);
 
-  test("round-trips an object value", async () => {
-    const storage = make();
-    const value = { url: "https://x.example", rateLimit: 42, tags: ["a", "b"], nested: { x: 1 } };
-    await storage.setItem("whk/acme/endpoints/ep_1", value);
-    expect(await storage.getItem("whk/acme/endpoints/ep_1")).toEqual(value);
-  });
-
-  test("overwrites an existing key (ON CONFLICT)", async () => {
-    const storage = make();
+describe("libsql storage (webhooks defaults)", () => {
+  test('the table defaults to "xtandard_webhooks"', async () => {
+    const c = fakeLibsqlClient();
+    const storage = createLibsqlStorage({ client: c });
     await storage.setItem("whk/acme/k", { v: 1 });
-    await storage.setItem("whk/acme/k", { v: 2 });
-    expect(await storage.getItem("whk/acme/k")).toEqual({ v: 2 });
+    const { rows } = await c.execute({ sql: "SELECT key FROM xtandard_webhooks", args: [] });
+    expect(Array.from(rows)).toEqual([{ key: "whk/acme/k" }]);
   });
 
-  test("removeItem deletes a key; missing is a no-op", async () => {
-    const storage = make();
-    await storage.setItem("whk/acme/k", { v: 1 });
-    await storage.removeItem("whk/acme/k");
-    expect(await storage.getItem("whk/acme/k")).toBeNull();
-    await storage.removeItem("whk/acme/nope");
-  });
-
-  test("getKeys lists + isolates by prefix (LIKE ESCAPE)", async () => {
-    const storage = make();
-    await storage.setItem("whk/app1/a", 1);
-    await storage.setItem("whk/app1/b", 2);
-    await storage.setItem("whk/app2/c", 3);
-    expect((await storage.getKeys("whk/app1/")).sort()).toEqual(["whk/app1/a", "whk/app1/b"]);
-    expect(await storage.getKeys("whk/app2/")).toEqual(["whk/app2/c"]);
-    expect(await storage.getKeys("whk/none/")).toEqual([]);
-  });
-
-  test("getKeys is case-exact and matches % _ ! \\ * ? [ ] literally", async () => {
-    // SQLite's LIKE folds ASCII case, so `whk/acme/` would also match `whk/Acme/…`.
-    const storage = make();
-    const keys = [
-      "whk/Acme/a",
-      "whk/acme/a",
-      "whk/ACME/a",
-      "whk/a%b/1",
-      "whk/aXb/1",
-      "whk/a_b/1",
-      "whk/a!b/1",
-      "whk/a\\b/1",
-      "whk/a*b/1",
-      "whk/a?b/1",
-      "whk/a[b]/1",
-      "whk/a:b/1",
-    ];
-    for (const key of keys) await storage.setItem(key, { key });
-    expect(await storage.getKeys("whk/acme/")).toEqual(["whk/acme/a"]);
-    expect(await storage.getKeys("whk/Acme/")).toEqual(["whk/Acme/a"]);
-    expect(await storage.getItem("whk/ACME/a")).toEqual({ key: "whk/ACME/a" });
-    for (const prefix of [
-      "whk/a%b/",
-      "whk/a_b/",
-      "whk/a!b/",
-      "whk/a\\b/",
-      "whk/a*b/",
-      "whk/a?b/",
-      "whk/a[b]/",
-      "whk/a:b/",
-    ])
-      expect(await storage.getKeys(prefix)).toEqual([`${prefix}1`]);
-  });
-
-  test("rejects unsafe table names", () => {
-    expect(() => createLibsqlStorage({ client: fakeLibsqlClient(), table: "bad; drop" })).toThrow();
-  });
-
-  test("requires a client or url", () => {
-    const storage = createLibsqlStorage({});
-    expect(storage.getItem("k")).rejects.toThrow(/client.*or.*url/i);
+  test("requires a client or url", async () => {
+    await expect(createLibsqlStorage({}).getItem("k")).rejects.toThrow(/client.*url/);
   });
 });

@@ -20,39 +20,18 @@
  * @module
  */
 
-import type { BuildColumns } from "drizzle-orm";
-import {
-  customType,
-  json,
-  mysqlTable,
-  type MySqlColumnBuilderBase,
-  type MySqlTableExtraConfigValue,
-} from "drizzle-orm/mysql-core";
-import type { DrizzleKvTable } from "./table.ts";
+import { mysqlKvTable, type MysqlKvTableOptions } from "@xtandard/kit/drizzle/mysql";
+import type { DrizzleKvTable } from "@xtandard/kit/drizzle/mysql";
 
-export type { DrizzleKvTable } from "./table.ts";
+export type { DrizzleKvTable } from "@xtandard/kit/drizzle/mysql";
 
-/** The `self` passed to an {@link MysqlWebhooksTableOptions.extraIndexes} callback. */
-type MysqlWebhooksColumns = BuildColumns<string, Record<string, MySqlColumnBuilderBase>, "mysql">;
-
-/** Options for {@link mysqlWebhooksTable}. */
-export interface MysqlWebhooksTableOptions {
-  /**
-   * `varchar` length for the `key` primary key. Default `512` (store keys are
-   * short slash-delimited paths). Keep within your InnoDB index-prefix limit.
-   */
-  keyLength?: number;
-  /** Additional columns merged into the table. */
-  extraColumns?: () => Record<string, MySqlColumnBuilderBase>;
-  /** Additional indexes/constraints; receives the built table for column references. */
-  extraIndexes?: (table: MysqlWebhooksColumns) => MySqlTableExtraConfigValue[];
-}
-
-/** A case- and accent-sensitive (`utf8mb4_bin`) `varchar(length)`. */
-const binVarchar = (name: string, length: number) =>
-  customType<{ data: string }>({
-    dataType: () => `varchar(${length}) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`,
-  })(name);
+/**
+ * Options for {@link mysqlWebhooksTable}: `keyLength` (default `512`; keep within
+ * your InnoDB index-prefix limit), `keyCollation` (default `utf8mb4_bin`; opt
+ * into `utf8mb4_0900_bin` / `utf8mb4_nopad_bin` for new tables),
+ * `extraColumns` and `extraIndexes`.
+ */
+export type MysqlWebhooksTableOptions = MysqlKvTableOptions;
 
 /**
  * Build the MySQL `mysqlTable` for the webhooks KV store: `key varchar PRIMARY
@@ -62,15 +41,5 @@ export function mysqlWebhooksTable(
   name = "xtandard_webhooks",
   opts?: MysqlWebhooksTableOptions,
 ): DrizzleKvTable {
-  const columns = {
-    key: binVarchar("key", opts?.keyLength ?? 512).primaryKey(),
-    value: json("value").notNull(),
-    ...opts?.extraColumns?.(),
-  };
-  // Cast to the exact `self` type Drizzle infers from `columns` — the public
-  // `extraIndexes` type uses a generic column map, which is a supertype.
-  const extraConfig = opts?.extraIndexes as
-    | ((self: BuildColumns<string, typeof columns, "mysql">) => MySqlTableExtraConfigValue[])
-    | undefined;
-  return mysqlTable(name, columns, extraConfig);
+  return mysqlKvTable(name, opts);
 }

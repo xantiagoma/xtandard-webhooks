@@ -14,6 +14,8 @@ import { createWebhooksCore, ReadonlyError } from "../src/core.ts";
 import { createFetchHandler } from "../src/server/create-fetch-handler.ts";
 import { clearFileStorage, createFileStorage } from "../src/storage/file.ts";
 import { createMemoryStorage } from "../src/storage/memory.ts";
+import { createUnstorageStorage } from "../src/storage/unstorage.ts";
+import { createStorage } from "unstorage";
 import type { CompareAndSwapWebhooksStorage, WebhooksStorage } from "../src/storage/contract.ts";
 import { generateSecret, sign, verify } from "../src/signing.ts";
 import { createPortalToken, verifyPortalToken } from "../src/portal.ts";
@@ -250,9 +252,10 @@ describe("#2 the panel warns when auto-starting a dispatcher over non-claim-safe
   it("warns for storage without claimDue/CAS, and does not for memory", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      // File storage has neither claimDue nor compareAndSwap → warn + start.
-      const dir = freshDir();
-      const risky = createFetchHandler({ storage: createFileStorage({ dir }) });
+      // unstorage has neither claimDue nor compareAndSwap → warn + start.
+      const risky = createFetchHandler({
+        storage: createUnstorageStorage({ storage: createStorage() }),
+      });
       expect(risky.dispatcher).not.toBeNull();
       expect(warn.mock.calls.flat().join(" ")).toContain("without atomic claiming");
       await risky.dispatcher?.stop();

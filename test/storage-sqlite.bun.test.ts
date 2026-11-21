@@ -4,107 +4,54 @@
  *
  *   bun test test/storage-sqlite.bun.test.ts
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, test } from "bun:test";
 import { createSqliteStorage, type SqliteWebhooksStorage } from "../src/storage/sqlite.ts";
+import { runStorageContractTests } from "./storage-contract.ts";
 
-let storage: SqliteWebhooksStorage;
-
-beforeEach(() => {
-  storage = createSqliteStorage({ table: "kv" }); // in-memory
-});
+const open: SqliteWebhooksStorage[] = [];
 afterEach(() => {
-  storage.close();
+  for (const s of open.splice(0)) s.close();
 });
 
-describe("sqlite storage", () => {
-  test("round-trips objects and returns null for missing keys", async () => {
-    expect(await storage.getItem("nope")).toBeNull();
-    await storage.setItem("whk/acme/endpoints/ep_1", { url: "https://x.example", tags: ["a"] });
-    expect(await storage.getItem("whk/acme/endpoints/ep_1")).toEqual({
-      url: "https://x.example",
-      tags: ["a"],
-    });
-  });
+let database = new Database(":memory:");
+runStorageContractTests(
+  "sqlite (bun:sqlite)",
+  () => {
+    database = new Database(":memory:");
+    return createSqliteStorage({ database });
+  },
+  {
+    t: { describe, test, expect },
+    seedLegacy: async (storage, key, raw) => {
+      await storage.getKeys(""); // run the DDL
+      database.query("INSERT INTO xtandard_webhooks (key, value) VALUES (?, ?)").run(key, raw);
+    },
+  },
+);
 
-  test("setItem overwrites", async () => {
-    await storage.setItem("k", "one");
-    await storage.setItem("k", "two");
-    expect(await storage.getItem("k")).toBe("two");
-  });
-
-  test("removeItem deletes", async () => {
-    await storage.setItem("k", 1);
-    await storage.removeItem("k");
-    expect(await storage.getItem("k")).toBeNull();
-  });
-
-  test("getKeys is case-exact and matches % _ ! \\ * ? [ ] literally", async () => {
-    // SQLite's LIKE folds ASCII case, so `whk/acme/` would also match `whk/Acme/…`.
-    const keys = [
-      "whk/Acme/a",
-      "whk/acme/a",
-      "whk/ACME/a",
-      "whk/a%b/1",
-      "whk/aXb/1",
-      "whk/a_b/1",
-      "whk/a!b/1",
-      "whk/a\\b/1",
-      "whk/a*b/1",
-      "whk/a?b/1",
-      "whk/a[b]/1",
-      "whk/a:b/1",
-    ];
-    for (const key of keys) await storage.setItem(key, { key });
-    expect(await storage.getKeys("whk/acme/")).toEqual(["whk/acme/a"]);
-    expect(await storage.getKeys("whk/Acme/")).toEqual(["whk/Acme/a"]);
-    expect(await storage.getItem("whk/ACME/a")).toEqual({ key: "whk/ACME/a" });
-    for (const prefix of [
-      "whk/a%b/",
-      "whk/a_b/",
-      "whk/a!b/",
-      "whk/a\\b/",
-      "whk/a*b/",
-      "whk/a?b/",
-      "whk/a[b]/",
-      "whk/a:b/",
-    ])
-      expect(await storage.getKeys(prefix)).toEqual([`${prefix}1`]);
-  });
-
-  test("getKeys filters by prefix", async () => {
-    await storage.setItem("whk/a/x", 1);
-    await storage.setItem("whk/a/y", 2);
-    await storage.setItem("whk/b/z", 3);
-    const keys = (await storage.getKeys("whk/a/")).sort();
-    expect(keys).toEqual(["whk/a/x", "whk/a/y"]);
-  });
-
-  test("due-index keys sort lexicographically = chronologically", async () => {
-    const pad = (n: number) => String(n).padStart(13, "0");
-    await storage.setItem(`whk/acme/due/${pad(1_720_000_300_000)}~dlv_0`, {});
-    await storage.setItem(`whk/acme/due/${pad(5)}~dlv_1`, {});
-    await storage.setItem(`whk/acme/due/${pad(1_720_000_100_000)}~dlv_2`, {});
-    const keys = (await storage.getKeys("whk/acme/due/")).sort();
-    expect(keys).toEqual([
-      `whk/acme/due/${pad(5)}~dlv_1`,
-      `whk/acme/due/${pad(1_720_000_100_000)}~dlv_2`,
-      `whk/acme/due/${pad(1_720_000_300_000)}~dlv_0`,
-    ]);
-  });
-
-  test("rejects unsafe table names", () => {
-    expect(() => createSqliteStorage({ table: "bad; drop table" })).toThrow();
+describe("sqlite storage (webhooks defaults)", () => {
+  test('the table defaults to "xtandard_webhooks" (rows from earlier releases read back)', async () => {
+    const db = new Database(":memory:");
+    db.run("CREATE TABLE xtandard_webhooks (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+    db.query("INSERT INTO xtandard_webhooks VALUES (?, ?)").run(
+      "whk/acme/metadata",
+      JSON.stringify({ name: "Acme", key: "acme" }),
+    );
+    const storage = createSqliteStorage({ database: db });
+    expect(await storage.getItem("whk/acme/metadata")).toEqual({ key: "acme", name: "Acme" });
+    db.close();
   });
 
   test("persists across instances sharing a file", async () => {
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
     const path = join(tmpdir(), `webhooks-sqlite-${Date.now()}.db`);
-    const a = createSqliteStorage({ path, table: "kv" });
-    await a.setItem("k", { v: 42 });
+    const a = createSqliteStorage({ path });
+    await a.setItem("whk/acme/k", { v: 1 });
     a.close();
-    const b = createSqliteStorage({ path, table: "kv" });
-    expect(await b.getItem("k")).toEqual({ v: 42 });
-    b.close();
+    const b = createSqliteStorage({ path });
+    open.push(b);
+    expect(await b.getItem("whk/acme/k")).toEqual({ v: 1 });
   });
 });
