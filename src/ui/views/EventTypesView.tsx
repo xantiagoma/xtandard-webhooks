@@ -4,9 +4,9 @@ import { ArrowLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import type { EventType } from "../types.ts";
 import { WebhooksApiError } from "../types.ts";
 import { deleteEventType, listEventTypes, updateEventType, upsertEventType } from "../api.ts";
-import { useToast } from "../components/Toast.tsx";
-import { Button, Badge } from "../components/ui-bits.tsx";
-import { ToggleSwitch, TextInput } from "../components/primitives.tsx";
+import { useToast } from "@xtandard/kit/ui";
+import { Button, Badge } from "@xtandard/kit/ui";
+import { ToggleSwitch, TextInput } from "@xtandard/kit/ui";
 import { JsonCodeEditor } from "../components/JsonCodeEditor.tsx";
 import {
   ConfirmDialog,
@@ -17,7 +17,7 @@ import {
   SectionCard,
 } from "../components/webhook-bits.tsx";
 import { groupEventTypes } from "../lib/format.ts";
-import { clearNavBlocker, setNavBlocker } from "../lib/nav-guard.ts";
+import { clearNavBlocker, setNavBlocker } from "@xtandard/kit/ui";
 
 interface Props {
   readonly: boolean;

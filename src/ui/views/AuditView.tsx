@@ -4,7 +4,7 @@ import { listAudit } from "../api.ts";
 import type { AuditEntry } from "../types.ts";
 import { EmptyCard, LoadingRow, PageHeader } from "../components/webhook-bits.tsx";
 import { formatDateTime } from "../lib/format.ts";
-import { cn } from "../lib/utils.ts";
+import { cn } from "@xtandard/kit/ui";
 
 interface Props {
   app: string;

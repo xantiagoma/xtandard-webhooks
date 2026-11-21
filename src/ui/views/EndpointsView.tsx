@@ -17,9 +17,9 @@ import {
   sendExample,
   updateEndpoint,
 } from "../api.ts";
-import { useToast } from "../components/Toast.tsx";
-import { Button, Badge } from "../components/ui-bits.tsx";
-import { Dropdown, TextInput } from "../components/primitives.tsx";
+import { useToast } from "@xtandard/kit/ui";
+import { Button, Badge } from "@xtandard/kit/ui";
+import { Dropdown, TextInput } from "@xtandard/kit/ui";
 import {
   ConfirmDialog,
   DeliveryStatusBadge,
@@ -32,8 +32,8 @@ import {
   SectionCard,
 } from "../components/webhook-bits.tsx";
 import { formatDateTime, relativeTime } from "../lib/format.ts";
-import { cn } from "../lib/utils.ts";
-import { clearNavBlocker, setNavBlocker } from "../lib/nav-guard.ts";
+import { cn } from "@xtandard/kit/ui";
+import { clearNavBlocker, setNavBlocker } from "@xtandard/kit/ui";
 
 interface Props {
   app: string;

@@ -7,6 +7,8 @@
 
 import type { DeliveryStatus, EventType } from "../types.ts";
 
+export { formatDurationMs, truncate } from "@xtandard/kit/ui";
+
 /** Absolute date-time, locale-aware. Returns `"—"` for missing/invalid input. */
 export function formatDateTime(iso: string | undefined | null): string {
   if (!iso) return "—";
@@ -50,13 +52,6 @@ export function relativeTime(iso: string | undefined | null, now: number = Date.
   return diff >= 0 ? `${value}${unit} ago` : `in ${value}${unit}`;
 }
 
-/** Attempt duration: `"87 ms"` below a second, `"1.25 s"` above. */
-export function formatDurationMs(ms: number | undefined | null): string {
-  if (ms === undefined || ms === null || !Number.isFinite(ms) || ms < 0) return "—";
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  return `${(ms / 1000).toFixed(2).replace(/\.?0+$/, "")} s`;
-}
-
 /** Human label for a delivery status (`failed` reads as the dead-letter state). */
 export function deliveryStatusLabel(status: DeliveryStatus): string {
   switch (status) {
@@ -83,12 +78,6 @@ export function deliveryStatusTone(status: DeliveryStatus): string {
     case "pending":
       return "border-warning/30 bg-warning/10 text-warning";
   }
-}
-
-/** Truncate with an ellipsis; never longer than `max` (including the ellipsis). */
-export function truncate(text: string, max: number): string {
-  if (max <= 1) return text.length > max ? "…" : text;
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 /**

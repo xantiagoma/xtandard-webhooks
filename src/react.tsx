@@ -23,60 +23,19 @@
  * @module react
  */
 
-import React from "react";
-import type { BaseLocationHook } from "wouter";
-import { useHashLocation } from "wouter/use-hash-location";
-import { useBrowserLocation } from "wouter/use-browser-location";
-import { memoryLocation } from "wouter/memory-location";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { createEmbed, type EmbedBaseProps, type EmbedRouting } from "@xtandard/kit/ui/embed";
+import type { FetchLike } from "@xtandard/kit/ui";
 import { App } from "./ui/App.tsx";
-import { ToastProvider } from "./ui/components/Toast.tsx";
-import { setApiBase, setApiToken, type FetchLike } from "./ui/api.ts";
-import { setPortalContainerRef } from "./ui/lib/portal-container.ts";
-import {
-  detectHostTheme,
-  getThemePref,
-  resolveTheme,
-  subscribeSystemTheme,
-  subscribeThemePref,
-  watchHostTheme,
-  type ResolvedTheme,
-} from "./ui/theme.ts";
+import * as api from "./ui/api.ts";
+import { themeStore } from "./ui/theme.ts";
 import "./ui/styles.css";
 
 /** Theme modes for the embedded components (see {@link WebhooksDashboardProps.theme}). */
 export type EmbedTheme = "auto" | "inherit" | "light" | "dark";
 
-/** Resolve the embed's theme for `mode`, re-rendering when its source changes. */
-function useEmbedTheme(mode: EmbedTheme): ResolvedTheme {
-  const read = React.useCallback((): ResolvedTheme => {
-    if (mode === "light" || mode === "dark") return mode;
-    if (mode === "inherit") return detectHostTheme();
-    return resolveTheme(getThemePref());
-  }, [mode]);
-
-  const [resolved, setResolved] = React.useState<ResolvedTheme>(read);
-
-  React.useEffect(() => {
-    const update = () => setResolved(read());
-    update();
-    if (mode === "inherit") return watchHostTheme(update);
-    if (mode === "auto") {
-      const offPref = subscribeThemePref(update);
-      const offSystem = subscribeSystemTheme(update);
-      return () => {
-        offPref();
-        offSystem();
-      };
-    }
-    return undefined;
-  }, [mode, read]);
-
-  return resolved;
-}
-
 /** Props for {@link WebhooksDashboard}. */
-export interface WebhooksDashboardProps {
+export interface WebhooksDashboardProps extends EmbedBaseProps {
   /**
    * Base URL where the panel API + `/config` are mounted (e.g. `"/webhooks"` or
    * `"https://admin.example.com/webhooks"`). Defaults to `""` (same origin, relative).
@@ -120,7 +79,7 @@ export interface WebhooksDashboardProps {
    * - `"memory"` — in-memory only; no URL coupling at all.
    * - a custom wouter location hook for full control.
    */
-  routing?: "hash" | "browser" | "memory" | BaseLocationHook;
+  routing?: EmbedRouting;
   /** Base path the panel is mounted at, used by `routing: "browser"` (e.g. `"/admin/webhooks"`). */
   routerBase?: string;
   /** Navbar logo image URL (replaces the title wordmark). Overrides server `/config`. */
@@ -145,92 +104,34 @@ export interface WebhooksPortalProps extends Omit<WebhooksDashboardProps, "initi
   token: string;
 }
 
-let fallbackClient: QueryClient | undefined;
-function getClient(): QueryClient {
-  fallbackClient ??= new QueryClient({
-    defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
-  });
-  return fallbackClient;
-}
+/**
+ * The shared embed plumbing (`@xtandard/kit/ui/embed`): one theme per embed on
+ * the `.xtandard-webhooks` wrapper, toasts and Base UI portals inside it, the
+ * memory router keeping its query string, and the portal token attached
+ * synchronously (queries refetch when it changes).
+ */
+const embed = createEmbed<{ initialApplicationKey?: string }>({
+  App,
+  scopeClass: "xtandard-webhooks",
+  api,
+  themeKey: themeStore,
+  tokenRouting: "hash", // the portal routes in the hash too, as it always has
+  displayNames: { dashboard: "WebhooksDashboard", token: "WebhooksPortal" },
+});
 
 /** The full webhooks admin dashboard as an embeddable React component. */
-export function WebhooksDashboard({
-  apiBaseUrl = "",
-  credentials,
-  fetch: fetchImpl,
-  queryClient,
-  theme = "auto",
-  className,
-  routing = "hash",
-  routerBase = "",
-  logoUrl,
-  initialApplicationKey,
-}: WebhooksDashboardProps): React.ReactElement {
-  // Set the API base synchronously so child queries (run on mount) use it.
-  setApiBase(apiBaseUrl, { credentials, fetch: fetchImpl });
-
-  const resolvedTheme = useEmbedTheme(theme);
-
-  const client = queryClient ?? getClient();
-
-  // Point Base UI portals (Select/Combobox popups, Dialogs) at the scoped
-  // wrapper so they render inside `.xtandard-webhooks` — the embed stylesheet
-  // is scoped, so anything portaled to document.body would be unstyled.
-  const wrapperRef = React.useRef<HTMLDivElement>(null);
-  setPortalContainerRef(wrapperRef);
-
-  // Resolve the routing strategy to a wouter location hook (+ base). The memory
-  // hook is created once so its in-memory history survives re-renders.
-  const memoryHook = React.useMemo(() => memoryLocation().hook, []);
-  const { hook, base } = React.useMemo(() => {
-    if (typeof routing === "function") return { hook: routing, base: routerBase };
-    if (routing === "browser") return { hook: useBrowserLocation, base: routerBase };
-    if (routing === "memory") return { hook: memoryHook, base: "" };
-    return { hook: useHashLocation, base: "" };
-  }, [routing, routerBase, memoryHook]);
-
-  return (
-    <QueryClientProvider client={client}>
-      {/* Toasts render inside the wrapper so the scoped stylesheet + theme reach them. */}
-      <div
-        ref={wrapperRef}
-        data-theme={resolvedTheme}
-        className={className ? `xtandard-webhooks ${className}` : "xtandard-webhooks"}
-      >
-        <ToastProvider>
-          <App
-            locationHook={hook}
-            base={base}
-            logoUrl={logoUrl}
-            initialApplicationKey={initialApplicationKey}
-            showThemeToggle={theme === "auto"}
-          />
-        </ToastProvider>
-      </div>
-    </QueryClientProvider>
-  );
-}
+export const WebhooksDashboard: React.FC<WebhooksDashboardProps> = embed.Dashboard;
 
 /**
  * The customer-scoped consumer portal as an embeddable React component. Renders
  * the same shell as {@link WebhooksDashboard} with the portal token attached as
  * a Bearer credential; the server scopes every request to the token's
- * application and `/config` flips the shell into the reduced portal chrome.
+ * application and the shell renders the reduced portal chrome.
  */
-export function WebhooksPortal({ token, ...rest }: WebhooksPortalProps): React.ReactElement {
-  // Attach the token synchronously so child queries (run on mount) send it; the
-  // effect keeps it current when the host swaps tokens (e.g. re-mint on expiry).
-  // The API client is module-level state, so this assumes one embed per page —
-  // same trade-off setApiBase makes.
-  setApiToken(token);
-  React.useEffect(() => {
-    setApiToken(token);
-  }, [token]);
+export const WebhooksPortal: React.FC<WebhooksPortalProps> = embed.TokenEmbed;
 
-  return <WebhooksDashboard {...rest} />;
-}
-
-export { setApiBase, setApiToken, type FetchLike } from "./ui/api.ts";
+export { setApiBase, setApiToken } from "./ui/api.ts";
+export type { FetchLike };
 export {
   setThemePref,
   getThemePref,

@@ -10,10 +10,10 @@ import {
   listEndpoints,
   retryDelivery,
 } from "../api.ts";
-import { useToast } from "../components/Toast.tsx";
+import { useToast } from "@xtandard/kit/ui";
 import { JsonCodeEditor } from "../components/JsonCodeEditor.tsx";
-import { Button, Badge } from "../components/ui-bits.tsx";
-import { Dropdown } from "../components/primitives.tsx";
+import { Button, Badge } from "@xtandard/kit/ui";
+import { Dropdown } from "@xtandard/kit/ui";
 import {
   DeliveryStatusBadge,
   EmptyCard,
@@ -24,7 +24,7 @@ import {
   SectionCard,
 } from "../components/webhook-bits.tsx";
 import { formatDateTime, formatDurationMs, relativeTime } from "../lib/format.ts";
-import { cn } from "../lib/utils.ts";
+import { cn } from "@xtandard/kit/ui";
 
 const PAGE_SIZE = 50;
 
