@@ -1,6 +1,31 @@
 # Changelog
 
-## Unreleased
+## v0.2.0
+
+Storage correctness across every backend (case-exact keys, literal prefixes), readable Elysia adapter types, a documentation site, and the xtandard brand kit. **Two storage backends need a one-time migration**: see below.
+
+### Migration
+
+Only these two setups need action; every other backend (Postgres, Redis, MongoDB, SQLite, libSQL, unstorage, Cloudflare KV, memory) upgrades with no migration.
+
+- **File storage (`@xtandard/webhooks/storage/file`): the on-disk layout changed.** Key segments are now encoded into case-safe file names. After upgrading, stop every writer (app, dispatcher, worker) and run once:
+
+  ```ts
+  import { migrateFileStorage } from "@xtandard/webhooks/storage/file";
+
+  await migrateFileStorage({ dir: "./data/webhooks" }); // → { moved: n }; idempotent
+  ```
+
+  Until you do, files in the old layout are **ignored** (applications, endpoints and messages written by v0.1.x won't be found), and `getKeys` logs a warning once. Details: [File storage: case-safe file names](https://me.xantiagoma.com/xtandard-webhooks/storage/#file-storage-case-safe-file-names).
+
+- **Drizzle storage on MySQL (`mysqlWebhooksTable()`): re-collate the `key` column.** New tables get `utf8mb4_bin`; a table created by v0.1.x keeps MySQL's case- and accent-insensitive default until you run (with your table name and `keyLength`, default `512`):
+
+  ```sql
+  ALTER TABLE xtandard_webhooks
+    MODIFY `key` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL;
+  ```
+
+  It cannot fail on duplicates. Details: [MySQL (Drizzle): a case-sensitive key column](https://me.xantiagoma.com/xtandard-webhooks/storage/#mysql-drizzle-a-case-sensitive-key-column).
 
 ### Fixed
 
@@ -9,16 +34,16 @@
 - **Redis storage: `getKeys` treated `*`, `?`, `[`, `]` in the prefix as glob patterns.** They are now escaped in `SCAN MATCH`.
 - **SQL storages (`sqlite`, `libsql`, `postgres`, Drizzle): `getKeys` could return keys that differ from the prefix by case.** SQLite's `LIKE` folds ASCII case, and a non-binary collation can fold case or accents. Results are now filtered to exact, case-sensitive prefix matches.
 - **Drizzle storage on MySQL: `getKeys` was a syntax error.** It used `LIKE … ESCAPE '\'`; in MySQL the backslash escapes the closing quote. It now uses `ESCAPE '!'`, which works on every dialect. Prefixes containing `%`, `_` or `!` match literally.
-- **Drizzle storage on MySQL: keys that differ only by case or accent collided.** `mysqlWebhooksTable()` now declares the `key` column with `utf8mb4_bin` (MySQL's default `utf8mb4_0900_ai_ci` folds case and accents), so `whk/Acme/…` and `whk/acme/…` are separate keys. **Existing tables need a one-time `ALTER TABLE`**: see [MySQL (Drizzle): a case-sensitive key column](docs/STORAGE.md#mysql-drizzle-a-case-sensitive-key-column).
+- **Drizzle storage on MySQL: keys that differ only by case or accent collided.** `mysqlWebhooksTable()` now declares the `key` column with `utf8mb4_bin` (MySQL's default `utf8mb4_0900_ai_ci` folds case and accents), so `whk/Acme/…` and `whk/acme/…` are separate keys. **Existing tables need a one-time `ALTER TABLE`**: see [MySQL (Drizzle): a case-sensitive key column](https://me.xantiagoma.com/xtandard-webhooks/storage/#mysql-drizzle-a-case-sensitive-key-column).
 
 ### Added
 
+- A documentation site: https://me.xantiagoma.com/xtandard-webhooks/ (guides, recipes and a generated API reference for every entry point).
 - `WebhooksElysiaPlugin` (from `@xtandard/webhooks/elysia` and `/elysia2`): the named return type of `webhooksElysia()`, the same type as before. The API reference now shows it instead of the flattened `Elysia<…, object & object & …>` generics.
 
 ### Changed
 
 - Brand: a generated vector kit in the xtandard family style (`docs/BRAND.md`, `scripts/brand-assets.sh`): app icon, symbol, light/dark lockups, favicons and a social card. The README header, the docs site (logo, favicons, `og:image`) and the standalone admin UI (favicon; the mark before the default title) use only its SVGs. The raster logos (`logo.png`, `logo-128.png`, `logo-256.png`, `favicon.png`) are gone; rasters remain only where a format needs them (`social.png` for `og:image`, `apple-touch-icon.png` and `favicon.ico` as `<head>` fallbacks).
-
 - `ElysiaWebhooksHandler` is now an interface with documented members (a call signature, `core`, `dispatcher`, `openapi()`); the type itself is unchanged.
 - Docs: the `/elysia2` API reference is generated against Elysia 2, and each module page lists the symbols it re-exports (e.g. `webhooksPanel` on `/elysia2`) with a link to where they are documented.
 
