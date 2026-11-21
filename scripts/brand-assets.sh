@@ -38,5 +38,5 @@ fi
 # Served copies: the docs site (site/public) and the admin UI (src/ui/public → dist/ui).
 for f in favicon.svg favicon.ico apple-touch-icon.png social.png; do cp "$f" "$root/site/public/$f"; done
 mkdir -p "$root/src/ui/public"
-for f in favicon.svg favicon.ico apple-touch-icon.png symbol.svg; do cp "$f" "$root/src/ui/public/$f"; done
+for f in favicon.svg favicon.ico apple-touch-icon.png symbol.svg symbol-light.svg; do cp "$f" "$root/src/ui/public/$f"; done
 echo "brand-assets: rebuilt docs/assets, site/public, src/ui/public"
