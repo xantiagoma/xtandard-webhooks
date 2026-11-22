@@ -370,7 +370,7 @@
   "scripts": {
     "build": "bun run build:lib && bun run build:elysia2-types && bun run build:ui && bun run build:react",
     "build:lib": "vp pack",
-    "build:elysia2-types": "tsc -p tsconfig.elysia2.build.json && bun scripts/fix-elysia2-types.ts",
+    "build:elysia2-types": "tsc -p tsconfig.elysia2.build.json && xtandard-kit fix-elysia2-types",
     "test": "vp test run",
     "test:coverage": "vp test run --coverage",
     "test:bun": "bun test ./test/*.bun.test.ts",
@@ -384,7 +384,7 @@
     "dev:ui": "vite --config vite.ui.config.ts",
     "test:e2e": "playwright test",
     "standalone": "bun run apps/standalone/src/index.ts",
-    "build:react": "vite build --config vite.react.config.ts && bun scripts/scope-embed-css.ts && tsc -p tsconfig.react.json",
+    "build:react": "vite build --config vite.react.config.ts && xtandard-kit scope-embed-css --scope xtandard-webhooks && tsc -p tsconfig.react.json",
     "docs:dev": "cd site && bun install && bun run dev",
     "docs:build": "cd site && bun install && bun run build",
     "docs:preview": "cd site && bun run preview",
@@ -401,6 +401,7 @@
     "examples:portal-embed": "bun scripts/example.ts portal-embed"
   },
   "dependencies": {
+    "@xtandard/kit": "^0.1.1",
     "valibot": "^1.0.0",
     "wouter": "^3.10.0"
   },
@@ -433,7 +434,6 @@
     "elysia-v2": "npm:elysia@2.0.0-rc.0",
     "exact-mirror": "^1.2.6",
     "express": "^5.0.0",
-    "get-port-please": "^3.2.0",
     "hono": "^4.6.0",
     "husky": "^9.1.7",
     "lucide-react": "^1.22",

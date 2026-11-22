@@ -8,9 +8,13 @@
  * @module
  */
 
-import type { Principal } from "../auth/contract.ts";
+import {
+  defineActions,
+  type AuthorizationProvider as KitAuthorizationProvider,
+  type AuthorizeInput as KitAuthorizeInput,
+} from "@xtandard/kit/authorization";
 
-/** The full set of authorizable actions. */
+/** Every action an admin API route can require. */
 export type WebhooksAction =
   | "application:read"
   | "application:create"
@@ -41,34 +45,54 @@ export type WebhooksResource =
   | { type: "delivery"; applicationKey: string; deliveryId?: string }
   | { type: "audit"; applicationKey?: string };
 
-/** Input passed to {@link AuthorizationProvider.authorize}. */
-export interface AuthorizeInput {
-  principal: Principal | null;
-  action: WebhooksAction;
-  resource: WebhooksResource;
-  request: Request;
-}
+/** What {@link AuthorizationProvider.authorize} receives. */
+export type AuthorizeInput = KitAuthorizeInput<WebhooksAction, WebhooksResource>;
 
-/** Decides whether an action is permitted. */
-export interface AuthorizationProvider {
-  authorize(input: AuthorizeInput): Promise<boolean>;
-}
+/** Decides whether a principal may perform an action on a resource. */
+export type AuthorizationProvider = KitAuthorizationProvider<WebhooksAction, WebhooksResource>;
 
-/** Actions that mutate state — blocked in readonly mode. */
-export const MUTATING_ACTIONS: ReadonlySet<WebhooksAction> = new Set<WebhooksAction>([
-  "application:create",
-  "application:update",
-  "application:delete",
-  "event-type:create",
-  "event-type:update",
-  "event-type:delete",
-  "endpoint:create",
-  "endpoint:update",
-  "endpoint:delete",
-  "endpoint:rotate-secret",
-  "message:publish",
-  "delivery:retry",
-]);
+/** The action constants (`ALL_ACTIONS`, `MUTATING_ACTIONS`, `isMutatingAction`). */
+export const WEBHOOKS_ACTIONS = defineActions<WebhooksAction>({
+  all: [
+    "application:read",
+    "application:create",
+    "application:update",
+    "application:delete",
+    "event-type:read",
+    "event-type:create",
+    "event-type:update",
+    "event-type:delete",
+    "endpoint:read",
+    "endpoint:create",
+    "endpoint:update",
+    "endpoint:delete",
+    "endpoint:rotate-secret",
+    "endpoint:read-secret",
+    "message:read",
+    "message:publish",
+    "delivery:read",
+    "delivery:retry",
+    "audit:read",
+  ],
+  mutating: [
+    "application:create",
+    "application:update",
+    "application:delete",
+    "event-type:create",
+    "event-type:update",
+    "event-type:delete",
+    "endpoint:create",
+    "endpoint:update",
+    "endpoint:delete",
+    "endpoint:rotate-secret",
+    "message:publish",
+    "delivery:retry",
+  ],
+});
 
-/** True if the action mutates state. */
-export const isMutatingAction = (action: WebhooksAction): boolean => MUTATING_ACTIONS.has(action);
+/** Actions that change state; denied in readonly mode. */
+export const MUTATING_ACTIONS: ReadonlySet<WebhooksAction> = WEBHOOKS_ACTIONS.MUTATING_ACTIONS;
+
+/** Whether `action` changes state. */
+export const isMutatingAction = (action: WebhooksAction): boolean =>
+  WEBHOOKS_ACTIONS.isMutatingAction(action);

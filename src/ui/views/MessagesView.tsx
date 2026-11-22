@@ -3,8 +3,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import type { Message } from "../types.ts";
 import { getMessage, listEventTypes, listMessages } from "../api.ts";
-import { Button } from "../components/ui-bits.tsx";
-import { Dropdown } from "../components/primitives.tsx";
+import { Button } from "@xtandard/kit/ui";
+import { Dropdown } from "@xtandard/kit/ui";
 import { JsonCodeEditor } from "../components/JsonCodeEditor.tsx";
 import {
   DeliveryStatusBadge,

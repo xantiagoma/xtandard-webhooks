@@ -770,3 +770,61 @@ describe("routes — base path, SPA, and method handling", () => {
     expect((await fetch(req("GET", "/assets/nope.js"))).status).toBe(404);
   });
 });
+
+describe("routes — key-shaped path params (inventory §5, MySQL PAD SPACE)", () => {
+  test("a trailing space or other non-key character in a path param is a 404, never a storage lookup", async () => {
+    const { fetch, core } = panel();
+    const endpoint = await seed(fetch);
+    for (const path of [
+      "/api/applications/acme%20",
+      "/api/applications/acme%20/endpoints",
+      `/api/applications/acme/endpoints/${endpoint.id}%20`,
+      "/api/event-types/invoice.paid%20",
+      "/api/applications/..",
+    ]) {
+      for (const method of ["GET", "DELETE"]) {
+        const res = await fetch(req(method, path));
+        expect(res.status, `${method} ${path}`).toBe(404);
+      }
+    }
+    // Nothing was deleted through the padded spellings.
+    expect(await core.getApplication("acme")).not.toBeNull();
+    expect((await core.listEndpoints("acme")).map((e) => e.id)).toEqual([endpoint.id]);
+  });
+
+  test("a malformed % escape is a 404, not a 500", async () => {
+    const { fetch } = panel();
+    expect((await fetch(req("GET", "/api/applications/%E0%A4%A"))).status).toBe(404);
+  });
+});
+
+describe("panel (from @xtandard/kit/server)", () => {
+  test("serves /healthcheck inside the panel", async () => {
+    const res = await panel({ basePath: "/webhooks" }).fetch(req("GET", "/webhooks/healthcheck"));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  test("the SPA gets window.__WEBHOOKS_CONFIG__, an escaped title and no-cache", async () => {
+    const res = await panel({ title: "<script>x</script>", uiDir: "/nonexistent" }).fetch(
+      req("GET", "/deliveries"),
+    );
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+    const html = await res.text();
+    expect(html).toContain("window.__WEBHOOKS_CONFIG__=");
+    expect(html).not.toContain("<script>x</script>");
+  });
+
+  test("a non-GET on a non-API path is 405 with Allow", async () => {
+    const res = await panel().fetch(req("POST", "/somewhere"));
+    expect(res.status).toBe(405);
+    expect(res.headers.get("allow")).toBe("GET, HEAD");
+  });
+
+  test("close() stops the dispatcher it started, once", async () => {
+    const p = createFetchHandler({ storage: createMemoryStorage() });
+    expect(p.dispatcher).not.toBeNull();
+    await p.close();
+    await p.close();
+  });
+});

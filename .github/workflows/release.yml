@@ -7,6 +7,12 @@ name: Release
 # tag `vX`, push main FIRST and the tag second — the tag push triggers this
 # workflow.
 #
+# The kit's reusable release-prepare.yml checks the tag against package.json,
+# runs the gate, builds, runs publint, packs the tarball and extracts the notes.
+# Publishing stays in this file: npm trusted publishing validates the calling
+# workflow, so the `publish` job below runs `npm publish` on the prepared
+# tarball.
+#
 # Auth is npm trusted publishing (OIDC) — no NPM_TOKEN secret. The trust is
 # configured on npmjs.com for this repo + this workflow file
 # (`npm trust github @xtandard/webhooks --repo xantiagoma/xtandard-webhooks --file release.yml`),
@@ -25,60 +31,55 @@ on:
         required: true
 
 permissions:
-  contents: write # create the GitHub Release
-  id-token: write # npm provenance
+  contents: read
 
 jobs:
+  prepare:
+    uses: xantiagoma/xtandard-kit/.github/workflows/release-prepare.yml@v0.1
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+
   publish:
+    needs: prepare
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+      id-token: write # npm provenance
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      TARBALL: ${{ needs.prepare.outputs.tarball }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           ref: ${{ inputs.tag || github.ref }}
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.14"
 
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install
-        run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: pack
 
-      - name: Build
-        run: bun run build
-
-      - name: Verify package
-        run: bunx publint
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+          path: .
 
       - name: Publish to npm (with provenance)
-        run: npm publish --provenance --access public
+        run: npm publish "./pack/${TARBALL}" --provenance --access public
 
-      # Turn the pushed tag into a GitHub Release (shown on /releases). Notes are
-      # the tag's CHANGELOG.md section — `--generate-notes` only lists merged PRs,
-      # and releases here are direct pushes, so it would be just a compare link.
+      # Turn the pushed tag into a GitHub Release (shown on /releases), with the
+      # tag's CHANGELOG.md section and a compare link (from release-prepare).
       - name: Create or publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          awk -v h="## ${TAG}" '$0 == h { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > notes.md
-          PREV=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)
-          if [ -n "${PREV}" ]; then
-            printf '\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
-              "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${PREV}" "${TAG}" >> notes.md
-          fi
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "Release ${TAG} exists — publishing it."
             gh release edit "${TAG}" --draft=false --latest --notes-file notes.md
           else
-            gh release create "${TAG}" \
-              --title "${TAG}" \
-              --notes-file notes.md \
-              --verify-tag \
-              --latest
+            gh release create "${TAG}" --title "${TAG}" --notes-file notes.md --verify-tag --latest
           fi

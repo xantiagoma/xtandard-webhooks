@@ -12,7 +12,6 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { canonicalStringify } from "../src/canonical.ts";
 import { createWebhooksCore } from "../src/core.ts";
 import { createFetchHandler } from "../src/server/create-fetch-handler.ts";
 import { createMemoryStorage } from "../src/storage/memory.ts";
@@ -45,17 +44,6 @@ function keyReorderingStorage(): WebhooksStorage {
     },
   };
 }
-
-describe("canonicalStringify", () => {
-  it("is key-order-insensitive but array-order-sensitive", () => {
-    expect(canonicalStringify({ b: 1, a: 2 })).toBe(canonicalStringify({ a: 2, b: 1 }));
-    expect(canonicalStringify({ x: { d: 1, c: 2 } })).toBe(
-      canonicalStringify({ x: { c: 2, d: 1 } }),
-    );
-    expect(canonicalStringify([1, 2])).not.toBe(canonicalStringify([2, 1]));
-    expect(canonicalStringify({ a: 1 })).not.toBe(canonicalStringify({ a: 2 }));
-  });
-});
 
 describe("issue 1 — idempotency survives a key-reordering control store", () => {
   it("a re-publish with the same multi-key payload returns the original, not a conflict", async () => {
@@ -132,7 +120,7 @@ describe("issue 2 — the panel honors a prebuilt core's split storage", () => {
 
   it("requires storage or a core", () => {
     expect(() => createFetchHandler({ dispatcher: false } as never)).toThrow(
-      /requires either `storage` or a prebuilt `core`/,
+      /createFetchHandler requires either `storage` or `core`/,
     );
   });
 });

@@ -4,6 +4,8 @@
  * wire-shape types the JSON admin API serves.
  */
 
+import { ApiError as KitApiError, type ApiErrorBody } from "@xtandard/kit/ui";
+
 export type {
   Application,
   AuditEntry,
@@ -72,19 +74,10 @@ export interface RecoverResponse {
   deliveryIds: string[];
 }
 
-export interface ApiError {
-  status: number;
-  error: string;
-  code?: string;
-  errors?: { path?: string; message: string }[];
-}
+/** The JSON error body the API answers with (`{ error, code?, errors? }` plus the status). */
+export type ApiError = ApiErrorBody;
 
-export class WebhooksApiError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly body: ApiError,
-  ) {
-    super(body.error);
-    this.name = "WebhooksApiError";
-  }
+/** A non-2xx API response, with the real HTTP `status` and the parsed `body`. */
+export class WebhooksApiError extends KitApiError {
+  override name = "WebhooksApiError";
 }

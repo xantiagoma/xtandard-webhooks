@@ -9,8 +9,12 @@
  * @module
  */
 
-import { existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import {
+  createPanelHandler,
+  requireOneOf,
+  resolveUiDir,
+  type CorsOptions,
+} from "@xtandard/kit/server";
 import type { AuthProvider } from "../auth/contract.ts";
 import type { AuthorizationProvider } from "../authorization/contract.ts";
 import { createWebhooksCore, type RetentionOptions, type WebhooksCore } from "../core.ts";
@@ -18,12 +22,15 @@ import type { DeliveryErrorReporter, DeliveryListener } from "../delivery-sink.t
 import { createDispatcher, type Dispatcher, type DispatcherOptions } from "../dispatcher.ts";
 import type { HookErrorReporter, WebhooksHooksInput } from "../hooks/contract.ts";
 import { hasDeliveryQueue, isCompareAndSwap, type WebhooksStorage } from "../storage/contract.ts";
-import { normalizeBasePath, stripBasePath } from "./base-path.ts";
-import { applyCorsHeaders, preflightResponse, type WebhooksCorsOptions } from "./cors.ts";
 import { buildOpenApiDocument } from "./openapi.ts";
-import { renderIndexHtml } from "./render-index-html.ts";
 import { handleApiRequest, type ApiContext, type WebhooksPortalOptions } from "./routes.ts";
-import { looksLikeAsset, serveStaticAsset } from "./static-assets.ts";
+
+/**
+ * CORS for the panel: `origin` (a string, a list, or a predicate; `"*"` with
+ * `credentials` echoes the caller's origin), `credentials`, `methods`,
+ * `headers` and `maxAge`.
+ */
+export type WebhooksCorsOptions = CorsOptions;
 
 /** Options for the panel handler (shared by every framework adapter). */
 export interface WebhooksPanelOptions {
@@ -81,7 +88,7 @@ export interface WebhooksPanelOptions {
   /**
    * Enable CORS on the handler itself — answers `OPTIONS` preflights and attaches
    * `Access-Control-*` headers to every response, so a **cross-origin** embed
-   * works regardless of the host framework. See {@link ./cors.WebhooksCorsOptions}.
+   * works regardless of the host framework. See {@link WebhooksCorsOptions}.
    */
   cors?: WebhooksCorsOptions;
   /**
@@ -106,33 +113,13 @@ export interface CreateFetchHandlerResult {
    * Merge it into your host app's docs — e.g. Elysia `@elysiajs/openapi` `references`.
    */
   openapi(): Record<string, unknown>;
+  /** Stop the dispatcher this panel started (idempotent; a no-op with `dispatcher: false`). */
+  close(): Promise<void>;
 }
 
 // Anonymous defaults keep embedded usage zero-config; harden via auth/authorization.
 const defaultAuth: AuthProvider = { authenticate: async () => ({ id: "anonymous" }) };
 const defaultAuthorization: AuthorizationProvider = { authorize: async () => true };
-
-/**
- * Locate the built admin SPA (`dist/ui`). When this module runs compiled (the
- * normal npm-consumer case) it lives in `dist/` and the bundle is the sibling
- * `./ui`. When it runs from TypeScript source (examples / dev against a
- * `file:`-linked checkout, where the runtime executes `src/server/*.ts`
- * directly), the bundle is instead at `<repo>/dist/ui` — i.e. `../../dist/ui`
- * relative to `src/server/`. Try the candidates and return the first that
- * exists, falling back to the compiled-layout path so the "build the UI" hint
- * still fires when nothing is built yet.
- */
-function defaultUiDir(): string {
-  try {
-    const candidates = [
-      new URL("./ui", import.meta.url), // compiled: dist/<chunk>.mjs → dist/ui
-      new URL("../../dist/ui", import.meta.url), // source: src/server/*.ts → <repo>/dist/ui
-    ].map((u) => fileURLToPath(u));
-    return candidates.find((p) => existsSync(p)) ?? candidates[0]!;
-  } catch {
-    return "./ui";
-  }
-}
 
 /**
  * Build the panel fetch handler.
@@ -155,17 +142,13 @@ function defaultUiDir(): string {
  * ```
  */
 export function createFetchHandler(options: WebhooksPanelOptions): CreateFetchHandlerResult {
-  const basePath = normalizeBasePath(options.basePath);
   const readonly = options.readonly ?? false;
   const title = options.title ?? "@xtandard/webhooks";
-  const uiDir = options.uiDir ?? defaultUiDir();
   const dispatcherOptions = options.dispatcher === false ? undefined : options.dispatcher;
 
   // Either a prebuilt `core` (its own source of truth for storage) or a
   // `storage` to build one from is required.
-  if (!options.core && !options.storage) {
-    throw new Error("createFetchHandler requires either `storage` or a prebuilt `core`. Pass one.");
-  }
+  requireOneOf("createFetchHandler", options, ["storage", "core"]);
 
   const core =
     options.core ??
@@ -187,7 +170,7 @@ export function createFetchHandler(options: WebhooksPanelOptions): CreateFetchHa
   if (options.dispatcher !== false) {
     // Claiming is only exclusive across processes when the queue storage has
     // native claimDue (redis/memory) or compare-and-swap. On plainer backends
-    // (postgres/file/mongodb/…) two dispatchers can claim the same delivery and
+    // (unstorage/cloudflare-kv) two dispatchers can claim the same delivery and
     // double-send. Since the panel auto-starts one on EVERY mount, warn loudly
     // so a horizontally-scaled deployment sets `dispatcher: false` on all but
     // one instance (or runs a single split worker). See docs/DELIVERY.md.
@@ -207,10 +190,24 @@ export function createFetchHandler(options: WebhooksPanelOptions): CreateFetchHa
       );
     }
     dispatcher = createDispatcher(core, dispatcherOptions ?? {});
-    dispatcher.start();
   }
+  const running = dispatcher;
 
-  const apiCtx: ApiContext = {
+  let apiCtx: ApiContext | undefined;
+  const panel = createPanelHandler({
+    basePath: options.basePath,
+    title,
+    readonly,
+    globalName: "__WEBHOOKS_CONFIG__",
+    uiDir: options.uiDir ?? resolveUiDir(import.meta.url),
+    ...(options.logoUrl !== undefined ? { logoUrl: options.logoUrl } : {}),
+    ...(options.cors ? { cors: options.cors } : {}),
+    api: (request, path) => handleApiRequest(request, path, apiCtx!),
+    tasks: running ? [{ start: () => running.start(), stop: () => running.stop() }] : [],
+  });
+  const { basePath } = panel;
+
+  apiCtx = {
     core,
     auth: options.auth ?? defaultAuth,
     authorization: options.authorization ?? defaultAuthorization,
@@ -221,50 +218,11 @@ export function createFetchHandler(options: WebhooksPanelOptions): CreateFetchHa
     ...(options.portal ? { portal: options.portal } : {}),
   };
 
-  const cors = options.cors;
-
-  async function fetch(request: Request): Promise<Response> {
-    // CORS preflight: answer OPTIONS directly so it works for any path,
-    // independent of the host framework wrapping this handler.
-    if (cors && request.method === "OPTIONS") return preflightResponse(request, cors);
-    const response = await respond(request);
-    return cors ? applyCorsHeaders(request, response, cors) : response;
-  }
-
-  async function respond(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    const path = stripBasePath(url.pathname, basePath);
-
-    // 1. JSON API + bootstrap config.
-    const api = await handleApiRequest(request, path, apiCtx);
-    if (api) return api;
-
-    // 2. Only GET/HEAD reach the static UI.
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      return new Response("Method Not Allowed", { status: 405 });
-    }
-
-    // 3. Static asset.
-    const asset = await serveStaticAsset(uiDir, path);
-    if (asset) return asset;
-
-    // 4. A path that looks like a file but was not found → 404 (don't mask with the SPA).
-    if (path !== "/" && looksLikeAsset(path)) {
-      return new Response("Not Found", { status: 404 });
-    }
-
-    // 5. SPA fallback.
-    const html = await renderIndexHtml(uiDir, {
-      title,
-      basePath,
-      readonly,
-      ...(options.logoUrl !== undefined ? { logoUrl: options.logoUrl } : {}),
-    });
-    return new Response(html, {
-      status: 200,
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
-  }
-
-  return { fetch, core, dispatcher, openapi: () => buildOpenApiDocument({ basePath, title }) };
+  return {
+    fetch: panel.fetch,
+    core,
+    dispatcher,
+    openapi: () => buildOpenApiDocument({ basePath, title }),
+    close: panel.close,
+  };
 }

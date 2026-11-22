@@ -1,5 +1,4 @@
 import type {
-  ApiError,
   Application,
   AuditEntry,
   Delivery,
@@ -17,83 +16,35 @@ import type {
   SignedRequest,
   WebhooksConfig,
 } from "./types.ts";
+import { createApiClient, type ApiClient } from "@xtandard/kit/ui";
 import { WebhooksApiError } from "./types.ts";
 
-// Base prepended to every request path. Empty by default so the bundled SPA uses
-// relative URLs (resolved against the injected <base href>). The React component
-// export sets this to the panel's mount URL via setApiBase().
-let apiBase = "";
-// Credentials mode for every request. `same-origin` (default) is right for the
-// bundled SPA and same-origin embeds; a cross-origin embed (panel on another
-// origin) must use `include` so the session cookie is sent. See setApiBase().
-let apiCredentials: RequestCredentials = "same-origin";
-// Optional custom fetch (e.g. to inject a bearer token / extra headers when the
-// panel is protected by a non-cookie scheme). Defaults to the global fetch.
-let apiFetch: FetchLike = (input, init) => fetch(input, init);
-// Portal token attached as `Authorization: Bearer whpt_…` to every request.
-// Set by the standalone SPA when a `?token=` query param is present (the portal
-// embed mechanism for the bundled UI) or by the React portal component.
-let apiToken: string | null = null;
+/**
+ * The webhooks API client (`@xtandard/kit/ui`'s): a base URL (empty by default,
+ * so the bundled SPA uses relative URLs resolved against the injected
+ * `<base href>`), the `credentials` mode, an optional custom `fetch`, and the
+ * portal token sent as `Authorization: Bearer whpt_…`. Non-2xx responses throw
+ * {@link WebhooksApiError}. Each product has its own client, so two dashboards
+ * on one page never share a base URL or token.
+ */
+const client = createApiClient({ errorClass: WebhooksApiError });
 
-/** The subset of `fetch` the client uses (the global `fetch` satisfies it). */
-export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
-/** Options for {@link setApiBase}. */
-export interface ApiClientOptions {
-  /** `credentials` mode for requests. Use `"include"` for cross-origin cookie auth. */
-  credentials?: RequestCredentials;
-  /** Custom fetch implementation (bearer tokens, extra headers, instrumentation). */
-  fetch?: FetchLike;
-}
+export type { ApiClientOptions, FetchLike } from "@xtandard/kit/ui";
 
 /** Point the API client at a base URL (used by the `@xtandard/webhooks/react` export). */
-export function setApiBase(base: string, opts?: ApiClientOptions): void {
-  apiBase = base.replace(/\/$/, "");
-  if (opts?.credentials) apiCredentials = opts.credentials;
-  if (opts?.fetch) apiFetch = opts.fetch;
-}
+export const setApiBase: ApiClient["setApiBase"] = client.setApiBase;
 
 /** Attach a portal token (`whpt_…`) as a Bearer credential on every request. */
-export function setApiToken(token: string | null): void {
-  apiToken = token;
-}
+export const setApiToken: ApiClient["setApiToken"] = client.setApiToken;
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await apiFetch(apiBase ? `${apiBase}/${path}` : path, {
-    credentials: apiCredentials,
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
-      ...(init?.headers ?? {}),
-    },
-  });
+/** The attached portal token, if any. */
+export const getApiToken: ApiClient["getApiToken"] = client.getApiToken;
 
-  if (!res.ok) {
-    let body: ApiError;
-    try {
-      body = (await res.json()) as ApiError;
-    } catch {
-      body = { status: res.status, error: res.statusText };
-    }
-    throw new WebhooksApiError(res.status, body);
-  }
-
-  const text = await res.text();
-  if (!text) return undefined as unknown as T;
-  return JSON.parse(text) as T;
-}
+const req = client.req;
 
 const appBase = (app: string): string => `api/applications/${encodeURIComponent(app)}`;
 
-const query = (params: { [key: string]: string | number | undefined }): string => {
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== "") search.set(key, String(value));
-  }
-  const s = search.toString();
-  return s ? `?${s}` : "";
-};
+const query = client.query;
 
 /* ─── Config ────────────────────────────────────────────────────────────────── */
 

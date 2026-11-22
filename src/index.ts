@@ -124,7 +124,7 @@ export type {
   CreateFetchHandlerResult,
   WebhooksPanelOptions,
 } from "./server/create-fetch-handler.ts";
-export type { WebhooksCorsOptions } from "./server/cors.ts";
+export type { WebhooksCorsOptions } from "./server/create-fetch-handler.ts";
 export { DEFAULT_PORTAL_ACTIONS } from "./server/routes.ts";
 export type { WebhooksPortalOptions } from "./server/routes.ts";
 export { buildOpenApiDocument } from "./server/openapi.ts";

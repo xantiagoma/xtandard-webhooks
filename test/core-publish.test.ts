@@ -97,6 +97,25 @@ describe("publish", () => {
     ).rejects.toThrow(PayloadTooLargeError);
   });
 
+  it("rejects an idempotency key that can't be a storage key segment", async () => {
+    const { core } = await seeded();
+    const issues = async (idempotencyKey: string) =>
+      core.publish("acme", { eventType: "invoice.paid", payload: {}, idempotencyKey }).then(
+        () => [],
+        (e: { errors?: { path: string; message: string }[] }) => e.errors ?? [],
+      );
+    expect(await issues("a/b")).toEqual([
+      { path: "message.idempotencyKey", message: expect.stringMatching(/^must match /) },
+    ]);
+    expect(await issues("..")).toEqual([
+      { path: "message.idempotencyKey", message: '".." is not an allowed key' },
+    ]);
+    expect(await issues("k".repeat(257))).toEqual([
+      { path: "message.idempotencyKey", message: "must be at most 256 characters" },
+    ]);
+    expect(await issues("k".repeat(256))).toEqual([]);
+  });
+
   it("is idempotent: same key + same payload returns the original message", async () => {
     const { core } = await seeded();
     await core.createEndpoint("acme", { url: "https://a.example/h" });

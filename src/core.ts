@@ -19,7 +19,7 @@
  * @module core
  */
 
-import { canonicalStringify } from "./canonical.ts";
+import { canonicalStringify, validateKeySegment } from "@xtandard/kit/util";
 import {
   attemptDelivery,
   buildSignedRequest,
@@ -88,7 +88,6 @@ import {
   validateApplication,
   validateEndpoint,
   validateEventType,
-  validateKeySegment,
   ValidationError,
 } from "./validation.ts";
 
@@ -1141,7 +1140,9 @@ export function createWebhooksCore(options: WebhooksCoreOptions): WebhooksCore {
       // The idempotency key becomes a storage key segment — reject anything that
       // could escape its namespace or traverse the filesystem (file adapter).
       if (input.idempotencyKey !== undefined) {
-        const issues = validateKeySegment(input.idempotencyKey, "message.idempotencyKey");
+        const issues = validateKeySegment(input.idempotencyKey, "message.idempotencyKey", {
+          maxLength: 256,
+        });
         assertValid({ valid: issues.length === 0, errors: issues });
       }
 

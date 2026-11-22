@@ -16,40 +16,46 @@
  *   Do NOT point both variants at the same keys — the types are incompatible
  *   (`WRONGTYPE`).
  *
- * `getKeys` uses a non-blocking `SCAN` cursor (never the blocking `KEYS`
- * command). `watch` is implemented with Redis keyspace notifications; it
- * requires the server to be configured with `notify-keyspace-events` covering
- * generic + string + expiry events (e.g. `KEA` — whose `A` class also covers the
- * module events that RedisJSON writes emit, e.g. `json.set`).
+ * The driver is `@xtandard/kit/storage/redis`: `getKeys` uses a de-duplicated,
+ * glob-escaped `SCAN`; `watch` uses keyspace notifications and needs
+ * `notify-keyspace-events` covering generic + string + expiry events (e.g.
+ * `KEA`, whose `A` class also covers RedisJSON's module events);
+ * `compareAndSwap` is a Lua script.
  *
  * ## Native delivery queue (`claimDue`)
  *
  * Both variants implement {@link DeliveryQueueStorage} natively: a sorted set at
- * `<prefix>whk:due` (score = due-time millis, member = the `whk/{app}/due/…`
- * key) is maintained alongside every `setItem`/`removeItem` that touches a
- * due-index key, keeping the zset and the plain keys consistent (so the generic
- * scan path still works). `claimDue` runs a small Lua script that atomically
- * pops due members up to `limit` by **repositioning** them at the lease expiry —
- * exclusivity between concurrent claimers is guaranteed by the script, and a
- * crashed claimer's members re-surface when the lease expires. The per-delivery
- * claim (verify claimable, write the lease, move the due key) then happens in
- * JS; under a race a claimer may return fewer than `limit`, never a duplicate.
+ * `<prefix>:whk:due` (score = due-time millis, member = the `whk/{app}/due/…`
+ * key) is kept in step with every write and remove of a due-index key through
+ * the driver's `onWrite` hook (so the generic scan path still works).
+ * `claimDue` runs a small Lua script that atomically pops due members up to
+ * `limit` by **repositioning** them at the lease expiry — exclusivity between
+ * concurrent claimers is guaranteed by the script, and a crashed claimer's
+ * members re-surface when the lease expires. The per-delivery claim is then a
+ * compare-and-swap; under a race a claimer may return fewer than `limit`, never
+ * a duplicate.
  *
  * @module
  */
 
 import type { RedisClientType } from "redis";
-import { deliveryKey, dueKey, parseDueKey, ROOT, type DueEntry } from "../keys.ts";
-import type { Delivery } from "../schema.ts";
-import { requirePeer } from "./contract.ts";
 import type {
-  DeliveryQueueStorage,
-  StorageChangeEvent,
-  WatchableWebhooksStorage,
-} from "./contract.ts";
+  RedisKvStorage,
+  RedisStorageOptions as KitRedisStorageOptions,
+} from "@xtandard/kit/storage/redis";
+import {
+  createRedisKvStorage,
+  jsonCodec,
+  redisConnection,
+  stringCodec,
+  type RedisValueCodec,
+} from "@xtandard/kit/storage/redis/internals";
+import { parseDueKey, ROOT } from "../keys.ts";
+import type { DeliveryQueueStorage } from "./contract.ts";
+import { claimDueEntries, DUE_KEY_RE } from "./due-queue.ts";
 
 /** Options for {@link createRedisStorage}. */
-export interface RedisStorageOptions {
+export interface RedisStorageOptions extends Omit<KitRedisStorageOptions, "onWrite"> {
   /** Connection URL (e.g. `redis://localhost:6379`). Used when no `client` is given. */
   url?: string;
   /** A pre-constructed (optionally pre-connected) node-redis client. */
@@ -65,81 +71,11 @@ export interface RedisStorageOptions {
 }
 
 /**
- * A {@link WatchableWebhooksStorage} + {@link DeliveryQueueStorage} backed by
- * Redis, plus a `close()` method that disconnects the client — but only the one
- * this adapter created. A client you passed in is left for you to manage.
+ * A watchable, compare-and-swap {@link DeliveryQueueStorage} backed by Redis,
+ * plus a `close()` method that disconnects the client — but only the one this
+ * adapter created. A client you passed in is left for you to manage.
  */
-export interface RedisWebhooksStorage extends WatchableWebhooksStorage, DeliveryQueueStorage {
-  /** Disconnect the underlying client if this adapter created it. No-op otherwise. */
-  close(): Promise<void>;
-}
-
-/** Minimal structural view of the node-redis client surface this adapter uses. */
-interface RedisLike {
-  isOpen?: boolean;
-  on?(event: string, listener: (...args: unknown[]) => void): unknown;
-  connect(): Promise<unknown>;
-  quit(): Promise<unknown>;
-  get(key: string): Promise<string | null>;
-  set(key: string, value: string): Promise<unknown>;
-  del(key: string): Promise<unknown>;
-  zAdd(key: string, members: { score: number; value: string }): Promise<unknown>;
-  zRem(key: string, member: string): Promise<unknown>;
-  eval(script: string, options?: { keys?: string[]; arguments?: string[] }): Promise<unknown>;
-  /** RedisJSON module commands (bundled in node-redis; the SERVER needs the module). */
-  json?: {
-    get(key: string): Promise<unknown>;
-    set(key: string, path: string, value: unknown): Promise<unknown>;
-  };
-  scanIterator(options?: { MATCH?: string; COUNT?: number }): AsyncIterable<string | string[]>;
-  duplicate(): RedisLike;
-  pSubscribe(
-    pattern: string,
-    listener: (message: string, channel: string) => void,
-  ): Promise<unknown>;
-  disconnect(): Promise<unknown>;
-}
-
-/** How a variant reads/writes values (the only place the two adapters differ). */
-interface RedisValueCodec {
-  get(c: RedisLike, key: string): Promise<unknown>;
-  set(c: RedisLike, key: string, value: unknown): Promise<void>;
-}
-
-/** Plain strings containing JSON — works on any Redis. */
-const stringCodec: RedisValueCodec = {
-  async get(c, key) {
-    const raw = await c.get(key);
-    return raw === null ? null : (JSON.parse(raw) as unknown);
-  },
-  async set(c, key, value) {
-    await c.set(key, JSON.stringify(value));
-  },
-};
-
-/** Native RedisJSON documents — requires the JSON module on the server. */
-const jsonCodec: RedisValueCodec = {
-  async get(c, key) {
-    const value = await requireJson(c).get(key);
-    return value ?? null;
-  },
-  async set(c, key, value) {
-    await requireJson(c).set(key, "$", value);
-  },
-};
-
-function requireJson(c: RedisLike): NonNullable<RedisLike["json"]> {
-  if (!c.json) {
-    throw new Error(
-      "createRedisJSONStorage: the client exposes no `json` commands — use node-redis " +
-        "(the `redis` package) v4+, and a server with the RedisJSON module (Redis 8 / Redis Stack).",
-    );
-  }
-  return c.json;
-}
-
-/** Matches the due-index keys the adapter mirrors into the due sorted set. */
-const DUE_KEY_RE = new RegExp(`^${ROOT}/[^/]+/due/`);
+export interface RedisWebhooksStorage extends RedisKvStorage, DeliveryQueueStorage {}
 
 /**
  * Atomically pop up to `ARGV[2]` members due at or before `ARGV[1]` by
@@ -206,197 +142,48 @@ export function createRedisJSONStorage(options: RedisStorageOptions): RedisWebho
   return buildRedisStorage(options, jsonCodec);
 }
 
-/** Shared implementation — connection, prefixing, SCAN, watch, due queue, close. */
+/** The kit driver plus the due sorted set and `claimDue`. */
 function buildRedisStorage(
   options: RedisStorageOptions,
   codec: RedisValueCodec,
 ): RedisWebhooksStorage {
-  const { url, prefix } = options;
-  const fullPrefix = prefix ? `${prefix}:` : "";
-  const ownsClient = !options.client;
+  const connection = redisConnection(options, "@xtandard/webhooks/storage/redis");
+  // The zset key carries the namespace; `:`-separated so it never collides with `whk/…`.
+  const dueZsetKey = `${options.prefix ? `${options.prefix}:` : ""}${ROOT}:due`;
 
-  let client: RedisLike | undefined = options.client as RedisLike | undefined;
-  let connecting: Promise<RedisLike> | undefined;
-
-  // node-redis emits `error` on connection drops and reconnect attempts. Without a
-  // listener Node treats it as an unhandled error and crashes the process — which
-  // would defeat the whole "storage can be down" promise. Always attach one.
-  const attachErrorHandler = (c: RedisLike): void => {
-    c.on?.("error", (err: unknown) => options.onError?.(err));
-  };
-  if (client) attachErrorHandler(client);
-
-  /** Resolve a connected client, creating/connecting on first use. */
-  async function getClient(): Promise<RedisLike> {
-    if (client?.isOpen) return client;
-    connecting ??= (async () => {
-      if (!client) {
-        let createClient: (opts: Record<string, unknown>) => RedisLike;
-        try {
-          ({ createClient } = (await import("redis")) as unknown as {
-            createClient: (opts: Record<string, unknown>) => RedisLike;
-          });
-        } catch {
-          requirePeer("redis", "storage/redis");
-        }
-        // disableOfflineQueue: commands reject immediately when the socket is down
-        // (instead of queueing forever) so a dispatcher tick fails fast and the
-        // next tick retries. The reconnect strategy keeps trying with a capped
-        // backoff so it recovers automatically.
-        client = createClient({
-          url,
-          disableOfflineQueue: true,
-          socket: { reconnectStrategy: (retries: number) => Math.min(retries * 100, 3000) },
-        });
-        attachErrorHandler(client);
+  const base = createRedisKvStorage({
+    ...options,
+    codec,
+    connection,
+    // Mirror due-index keys into the due zset so claimDue can pop by score.
+    onWrite: async (key, value, { client }) => {
+      if (!DUE_KEY_RE.test(key)) return;
+      if (value === null) {
+        await client.zRem(dueZsetKey, key);
+        return;
       }
-      if (!client.isOpen) await client.connect();
-      return client;
-    })();
-    try {
-      return await connecting;
-    } finally {
-      connecting = undefined;
-    }
-  }
-
-  /** Prepend the namespace to a caller key. */
-  const toRedisKey = (key: string): string => `${fullPrefix}${key}`;
-  /** Strip the namespace off a Redis key, yielding the caller key. */
-  const fromRedisKey = (key: string): string =>
-    fullPrefix && key.startsWith(fullPrefix) ? key.slice(fullPrefix.length) : key;
-
-  /**
-   * The due-index sorted set (members are caller due keys; the zset key itself
-   * carries the namespace). `:`-separated so it never collides with `whk/…`.
-   */
-  const dueZsetKey = toRedisKey(`${ROOT}:due`);
+      const parsed = parseDueKey(key);
+      if (parsed) await client.zAdd(dueZsetKey, { score: parsed.dueAtMillis, value: key });
+    },
+  });
 
   return {
-    async getItem<T>(key: string): Promise<T | null> {
-      const c = await getClient();
-      return ((await codec.get(c, toRedisKey(key))) as T | null) ?? null;
-    },
-
-    async setItem<T>(key: string, value: T): Promise<void> {
-      const c = await getClient();
-      await codec.set(c, toRedisKey(key), value);
-      // Mirror due-index keys into the due zset so claimDue can pop by score.
-      if (DUE_KEY_RE.test(key)) {
-        const parsed = parseDueKey(key);
-        if (parsed) await c.zAdd(dueZsetKey, { score: parsed.dueAtMillis, value: key });
-      }
-    },
-
-    async removeItem(key: string): Promise<void> {
-      const c = await getClient();
-      await c.del(toRedisKey(key));
-      if (DUE_KEY_RE.test(key)) await c.zRem(dueZsetKey, key);
-    },
-
-    async getKeys(prefix: string): Promise<string[]> {
-      const c = await getClient();
-      // SCAN MATCH is a glob: escape its metacharacters so the prefix matches literally.
-      const match = `${toRedisKey(prefix).replace(/[\\*?[\]]/g, (c) => `\\${c}`)}*`;
-      const out: string[] = [];
-      for await (const entry of c.scanIterator({ MATCH: match, COUNT: 100 })) {
-        // node-redis v4 yields one key per iteration; v5 may yield batches.
-        if (Array.isArray(entry)) {
-          for (const k of entry) out.push(fromRedisKey(k));
-        } else {
-          out.push(fromRedisKey(entry));
-        }
-      }
-      return out.filter((key) => key.startsWith(prefix));
-    },
-
-    async claimDue(input: { now: string; limit: number; leaseMs: number }): Promise<Delivery[]> {
-      const c = await getClient();
+    ...base,
+    async claimDue(input) {
+      const c = await connection.get();
       const nowMillis = Date.parse(input.now);
-      const leaseExpiryMillis = nowMillis + input.leaseMs;
       // Atomic pop: reposition due members at the lease expiry so no concurrent
       // claimer can see them, while a crashed claimer's members re-surface.
       const members = (await c.eval(CLAIM_SCRIPT, {
         keys: [dueZsetKey],
-        arguments: [String(nowMillis), String(input.limit), String(leaseExpiryMillis)],
+        arguments: [String(nowMillis), String(input.limit), String(nowMillis + input.leaseMs)],
       })) as string[] | null;
-
-      const claimed: Delivery[] = [];
+      const valid: string[] = [];
       for (const member of members ?? []) {
-        const parsed = parseDueKey(member);
-        if (!parsed) {
-          await c.zRem(dueZsetKey, member); // unparseable member — sweep from the zset
-          continue;
-        }
-        const entry = (await codec.get(c, toRedisKey(member))) as DueEntry | null;
-        if (!entry) {
-          await c.zRem(dueZsetKey, member); // stale zset member with no backing key
-          continue;
-        }
-        const dKey = deliveryKey(entry.app, entry.deliveryId);
-        const delivery = (await codec.get(c, toRedisKey(dKey))) as Delivery | null;
-        // Orphaned or already-terminal entries are garbage — sweep them.
-        if (!delivery || delivery.status === "succeeded" || delivery.status === "failed") {
-          await c.del(toRedisKey(member));
-          await c.zRem(dueZsetKey, member);
-          continue;
-        }
-        // Claimable = pending, or delivering with an expired lease. A delivery
-        // with an active lease was claimed elsewhere; its member is already
-        // repositioned near the lease expiry, so just skip it.
-        const leaseExpired =
-          delivery.status === "delivering" &&
-          (!delivery.leaseUntil || Date.parse(delivery.leaseUntil) <= nowMillis);
-        if (delivery.status !== "pending" && !leaseExpired) continue;
-
-        const leaseUntil = new Date(leaseExpiryMillis).toISOString();
-        const next: Delivery = {
-          ...delivery,
-          status: "delivering",
-          leaseUntil,
-          updatedAt: input.now,
-        };
-        await codec.set(c, toRedisKey(dKey), next);
-        // Move the due entry (plain key + zset member) to the lease-expiry
-        // position so a crashed claimer's work re-surfaces automatically.
-        const nextDueKey = dueKey(entry.app, leaseExpiryMillis, entry.deliveryId);
-        await c.del(toRedisKey(member));
-        await c.zRem(dueZsetKey, member);
-        await codec.set(c, toRedisKey(nextDueKey), entry);
-        await c.zAdd(dueZsetKey, { score: leaseExpiryMillis, value: nextDueKey });
-        claimed.push(next);
+        if (parseDueKey(member)) valid.push(member);
+        else await c.zRem(dueZsetKey, member); // unparseable member — sweep from the zset
       }
-      return claimed;
+      return claimDueEntries(base, valid, input);
     },
-
-    async watch(
-      prefix: string,
-      callback: (event: StorageChangeEvent) => void,
-    ): Promise<() => void> {
-      // Keyspace notifications publish to `__keyspace@<db>__:<key>`; subscribe to
-      // all key events under our namespaced prefix and translate them.
-      const c = await getClient();
-      const subscriber = c.duplicate();
-      attachErrorHandler(subscriber);
-      await subscriber.connect();
-      const pattern = `__keyspace@*__:${toRedisKey(prefix)}*`;
-      await subscriber.pSubscribe(pattern, (event: string, channel: string) => {
-        const idx = channel.indexOf("__:");
-        if (idx === -1) return;
-        const redisKey = channel.slice(idx + 3);
-        const key = fromRedisKey(redisKey);
-        if (!key.startsWith(prefix)) return;
-        const type: StorageChangeEvent["type"] =
-          event === "del" || event === "expired" ? "remove" : "update";
-        callback({ type, key });
-      });
-      return () => {
-        void subscriber.disconnect();
-      };
-    },
-
-    async close(): Promise<void> {
-      if (ownsClient && client?.isOpen) await client.quit();
-    },
-  } satisfies RedisWebhooksStorage;
+  };
 }

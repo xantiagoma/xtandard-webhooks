@@ -9,49 +9,26 @@
  * @module
  */
 
+import {
+  assertValid,
+  issuesFrom,
+  jsonValueSchema,
+  KEY_SEGMENT_REGEX,
+  ValidationError,
+} from "@xtandard/kit/util";
+import type { ValidationIssue, ValidationResult } from "@xtandard/kit/util";
 import * as v from "valibot";
 import { RESERVED_APPLICATION_KEYS } from "./keys.ts";
 import type { Application, Endpoint } from "./schema.ts";
 
 /** Allowed characters for application keys and event type names. */
-export const KEY_REGEX = /^[a-zA-Z0-9._-]+$/;
-
-/**
- * Validate a caller-supplied string that becomes a **storage key segment**
- * (e.g. an idempotency key). Rejects anything that could escape its namespace
- * or traverse the filesystem on the file adapter: characters outside
- * {@link KEY_REGEX}, and the dot-only segments `.` / `..`. Returns the issue
- * list (empty when safe) so callers can fold it into a {@link ValidationError}.
- */
-export function validateKeySegment(value: string, path: string): ValidationIssue[] {
-  if (!KEY_REGEX.test(value)) {
-    return [{ path, message: `must match ${KEY_REGEX} (no slashes or path separators)` }];
-  }
-  if (/^\.+$/.test(value)) {
-    return [{ path, message: `"${value}" is not an allowed key` }];
-  }
-  if (value.length > 256) {
-    return [{ path, message: "must be at most 256 characters" }];
-  }
-  return [];
-}
+export const KEY_REGEX: RegExp = KEY_SEGMENT_REGEX;
 
 /**
  * Header names owned by the Standard Webhooks wire contract. Endpoints may not
  * override them via static headers.
  */
 export const RESERVED_HEADERS = ["webhook-id", "webhook-timestamp", "webhook-signature"] as const;
-
-const jsonValueSchema: v.GenericSchema<unknown> = v.lazy(() =>
-  v.union([
-    v.string(),
-    v.number(),
-    v.boolean(),
-    v.null(),
-    v.array(jsonValueSchema),
-    v.record(v.string(), jsonValueSchema),
-  ]),
-);
 
 const keySchema = v.pipe(v.string(), v.minLength(1), v.maxLength(256), v.regex(KEY_REGEX));
 
@@ -94,42 +71,7 @@ const endpointSchema = v.object({
   firstFailingAt: v.optional(v.nullable(v.string())),
 });
 
-/** A single validation problem with a dotted path into the offending data. */
-export interface ValidationIssue {
-  path: string;
-  message: string;
-}
-
-/** Result of the `validate*` functions. */
-export interface ValidationResult {
-  valid: boolean;
-  errors: ValidationIssue[];
-}
-
-/** Raised by {@link assertValid} when an input fails validation. Maps to HTTP 422. */
-export class ValidationError extends Error {
-  readonly errors: ValidationIssue[];
-  constructor(errors: ValidationIssue[]) {
-    super(`Validation failed:\n${errors.map((e) => `  - ${e.path}: ${e.message}`).join("\n")}`);
-    this.name = "ValidationError";
-    this.errors = errors;
-  }
-}
-
-/** Throw a {@link ValidationError} when `result` is invalid. */
-export function assertValid(result: ValidationResult): void {
-  if (!result.valid) throw new ValidationError(result.errors);
-}
-
-function structuralIssues(
-  issues: readonly v.BaseIssue<unknown>[],
-  basePath: string,
-): ValidationIssue[] {
-  return issues.map((issue) => ({
-    path: `${basePath}.${(issue.path ?? []).map((p) => String(p.key)).join(".")}`,
-    message: issue.message,
-  }));
-}
+export { assertValid, ValidationError, type ValidationIssue, type ValidationResult };
 
 /**
  * Validate an {@link Application}: structure + reserved-key check.
@@ -145,7 +87,7 @@ function structuralIssues(
 export function validateApplication(input: unknown, basePath = "application"): ValidationResult {
   const parsed = v.safeParse(applicationSchema, input);
   if (!parsed.success) {
-    return { valid: false, errors: structuralIssues(parsed.issues, basePath) };
+    return { valid: false, errors: issuesFrom(parsed.issues, basePath) };
   }
   const application = parsed.output as Application;
   const errors: ValidationIssue[] = [];
@@ -162,7 +104,7 @@ export function validateApplication(input: unknown, basePath = "application"): V
 export function validateEventType(input: unknown, basePath = "eventType"): ValidationResult {
   const parsed = v.safeParse(eventTypeSchema, input);
   if (!parsed.success) {
-    return { valid: false, errors: structuralIssues(parsed.issues, basePath) };
+    return { valid: false, errors: issuesFrom(parsed.issues, basePath) };
   }
   return { valid: true, errors: [] };
 }
@@ -232,7 +174,7 @@ export function validateEndpoint(
 ): ValidationResult {
   const parsed = v.safeParse(endpointSchema, input);
   if (!parsed.success) {
-    return { valid: false, errors: structuralIssues(parsed.issues, basePath) };
+    return { valid: false, errors: issuesFrom(parsed.issues, basePath) };
   }
   const endpoint = parsed.output as unknown as Endpoint;
   const errors: ValidationIssue[] = [];

@@ -10,39 +10,18 @@
  * @module
  */
 
+import { delegatedAuthorization as kitDelegated } from "@xtandard/kit/authorization/delegated";
 import type { AuthorizationProvider, AuthorizeInput } from "./contract.ts";
 
 /** Options for {@link delegatedAuthorization}. */
 export interface DelegatedAuthorizationOptions {
-  /**
-   * Decide whether the {@link AuthorizeInput} is permitted. Return `true` to
-   * allow. May be synchronous or asynchronous.
-   */
+  /** Decide whether to allow the action. May be sync or async. */
   authorize: (input: AuthorizeInput) => Promise<boolean> | boolean;
 }
 
-/**
- * Create an {@link AuthorizationProvider} from a plain decision function.
- *
- * @example
- * ```ts
- * import { delegatedAuthorization } from "@xtandard/webhooks/authorization/delegated";
- *
- * const authz = delegatedAuthorization({
- *   authorize: ({ principal, action, resource }) =>
- *     resource.type !== "application" ||
- *     (principal?.metadata as { apps?: string[] } | undefined)?.apps?.includes(
- *       resource.applicationKey,
- *     ) === true,
- * });
- * ```
- */
+/** Create an {@link AuthorizationProvider} from your own `authorize` function. */
 export function delegatedAuthorization(
   options: DelegatedAuthorizationOptions,
 ): AuthorizationProvider {
-  return {
-    async authorize(input: AuthorizeInput): Promise<boolean> {
-      return await options.authorize(input);
-    },
-  };
+  return kitDelegated(options);
 }

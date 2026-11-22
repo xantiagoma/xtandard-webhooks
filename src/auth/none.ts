@@ -15,31 +15,4 @@
  * @module
  */
 
-import type { AuthProvider, Principal } from "./contract.ts";
-
-/** The fixed principal returned by {@link noAuth}. */
-export const ANONYMOUS_PRINCIPAL: Principal = { id: "anonymous" };
-
-/**
- * Create an {@link AuthProvider} that performs no authentication and resolves
- * every request to the shared {@link ANONYMOUS_PRINCIPAL}.
- *
- * Because it never returns `null`, the request is always "authenticated" — use
- * an {@link AuthorizationProvider} to control what the anonymous principal may
- * actually do.
- *
- * @example
- * ```ts
- * import { noAuth } from "@xtandard/webhooks/auth/none";
- *
- * const auth = noAuth();
- * await auth.authenticate(request); // → { id: "anonymous" }
- * ```
- */
-export function noAuth(): AuthProvider {
-  return {
-    async authenticate(_request: Request): Promise<Principal | null> {
-      return ANONYMOUS_PRINCIPAL;
-    },
-  };
-}
+export { ANONYMOUS_PRINCIPAL, noAuth } from "@xtandard/kit/auth/none";

@@ -13,31 +13,19 @@
  * @module
  */
 
-import type { AuthorizationProvider, AuthorizeInput, WebhooksAction } from "./contract.ts";
-import { isMutatingAction } from "./contract.ts";
+import {
+  rolesAuthorization as kitRoles,
+  type RolePolicy as KitRolePolicy,
+} from "@xtandard/kit/authorization/roles";
+import {
+  WEBHOOKS_ACTIONS,
+  type AuthorizationProvider,
+  type WebhooksAction,
+  type WebhooksResource,
+} from "./contract.ts";
 
 /** Every action in the system, used to expand non-wildcard "all actions" presets. */
-export const ALL_ACTIONS: readonly WebhooksAction[] = [
-  "application:read",
-  "application:create",
-  "application:update",
-  "application:delete",
-  "event-type:read",
-  "event-type:create",
-  "event-type:update",
-  "event-type:delete",
-  "endpoint:read",
-  "endpoint:create",
-  "endpoint:update",
-  "endpoint:delete",
-  "endpoint:rotate-secret",
-  "endpoint:read-secret",
-  "message:read",
-  "message:publish",
-  "delivery:read",
-  "delivery:retry",
-  "audit:read",
-];
+export const ALL_ACTIONS: readonly WebhooksAction[] = WEBHOOKS_ACTIONS.ALL_ACTIONS;
 
 /**
  * Every read-only action (the `*:read` subset of {@link ALL_ACTIONS}).
@@ -49,7 +37,7 @@ export const READ_ACTIONS: readonly WebhooksAction[] = ALL_ACTIONS.filter((a) =>
 );
 
 /** A role policy: each role maps to an explicit action list or the `"*"` wildcard. */
-export type RolePolicy = Record<string, WebhooksAction[] | "*">;
+export type RolePolicy = KitRolePolicy<WebhooksAction>;
 
 /**
  * The default role policy applied when {@link RolesAuthorizationOptions.policy}
@@ -106,33 +94,9 @@ export interface RolesAuthorizationOptions {
  * ```
  */
 export function rolesAuthorization(options: RolesAuthorizationOptions = {}): AuthorizationProvider {
-  const policy = options.policy ?? DEFAULT_ROLE_POLICY;
-  const readonly = options.readonly ?? false;
-
-  // Pre-compute each role's granted action set for O(1) lookups. A role mapped
-  // to "*" is recorded as `null` (wildcard).
-  const grants = new Map<string, Set<WebhooksAction> | null>();
-  for (const [role, actions] of Object.entries(policy)) {
-    grants.set(role, actions === "*" ? null : new Set(actions));
-  }
-
-  return {
-    async authorize(input: AuthorizeInput): Promise<boolean> {
-      if (readonly && isMutatingAction(input.action)) return false;
-
-      const principal = input.principal;
-      if (!principal) return false;
-
-      const roles = principal.roles;
-      if (!roles || roles.length === 0) return false;
-
-      for (const role of roles) {
-        if (!grants.has(role)) continue;
-        const granted = grants.get(role);
-        if (granted === null) return true; // wildcard
-        if (granted?.has(input.action)) return true;
-      }
-      return false;
-    },
-  };
+  return kitRoles<WebhooksAction, WebhooksResource>({
+    policy: options.policy ?? DEFAULT_ROLE_POLICY,
+    actions: WEBHOOKS_ACTIONS,
+    readonly: options.readonly,
+  });
 }

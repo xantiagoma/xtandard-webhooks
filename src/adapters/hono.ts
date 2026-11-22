@@ -13,24 +13,29 @@
  */
 
 import { Hono } from "hono";
-import { createFetchHandler, type WebhooksPanelOptions } from "../server/create-fetch-handler.ts";
+import { mountPanel } from "@xtandard/kit/adapters/hono";
+import {
+  createFetchHandler,
+  type CreateFetchHandlerResult,
+  type WebhooksPanelOptions,
+} from "../server/create-fetch-handler.ts";
 
 /**
- * Create a Hono sub-app serving the panel. The admin `core`, the started
- * `dispatcher` (or `null`), and the `openapi()` document builder are attached.
+ * Build the panel as a Hono app (every path and method), carrying the core,
+ * the dispatcher, the OpenAPI document and `close()`.
  */
 export function webhooksPanel(options: WebhooksPanelOptions): Hono & {
-  core: ReturnType<typeof createFetchHandler>["core"];
-  dispatcher: ReturnType<typeof createFetchHandler>["dispatcher"];
-  openapi: ReturnType<typeof createFetchHandler>["openapi"];
+  core: CreateFetchHandlerResult["core"];
+  dispatcher: CreateFetchHandlerResult["dispatcher"];
+  openapi: CreateFetchHandlerResult["openapi"];
+  close: CreateFetchHandlerResult["close"];
 } {
   const handler = createFetchHandler(options);
-  const app = new Hono();
-  app.all("*", (c) => handler.fetch(c.req.raw));
-  return Object.assign(app, {
+  return Object.assign(mountPanel(new Hono(), handler.fetch), {
     core: handler.core,
     dispatcher: handler.dispatcher,
     openapi: handler.openapi,
+    close: handler.close,
   });
 }
 

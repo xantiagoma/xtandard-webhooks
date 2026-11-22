@@ -8,6 +8,7 @@
 
 import type { WebhooksCore } from "../core.ts";
 import type { Dispatcher } from "../dispatcher.ts";
+import { createPass as kitCreatePass, type PassContext } from "@xtandard/kit/adapters/elysia";
 import { createFetchHandler, type WebhooksPanelOptions } from "../server/create-fetch-handler.ts";
 
 /** A web-standard fetch handler with `core` + `dispatcher` + `openapi()` attached. */
@@ -20,6 +21,8 @@ export interface ElysiaWebhooksHandler {
   dispatcher: Dispatcher | null;
   /** The admin API as an OpenAPI 3.1 document (also served at `{basePath}/api/openapi.json`). */
   openapi(): Record<string, unknown>;
+  /** Stop the dispatcher this panel started. */
+  close(): Promise<void>;
 }
 
 /** Create a panel handler suitable for `Elysia.mount(path, handler)`. */
@@ -29,6 +32,7 @@ export function webhooksPanel(options: WebhooksPanelOptions): ElysiaWebhooksHand
   fn.core = handler.core;
   fn.dispatcher = handler.dispatcher;
   fn.openapi = handler.openapi;
+  fn.close = handler.close;
   return fn;
 }
 
@@ -45,25 +49,11 @@ export interface WebhooksElysiaOptions extends WebhooksPanelOptions {
  */
 export function createPass(options: WebhooksElysiaOptions): {
   prefix: string;
-  pass: (ctx: { request: Request; body?: unknown }) => Promise<Response>;
+  pass: (ctx: PassContext) => Promise<Response>;
 } {
   const prefix = options.prefix ?? "/webhooks";
   const handler = createFetchHandler({ ...options, basePath: options.basePath ?? prefix });
-
-  const pass = (ctx: { request: Request; body?: unknown }): Promise<Response> => {
-    const r = ctx.request;
-    if (ctx.body != null && (r.method === "POST" || r.method === "PUT")) {
-      return handler.fetch(
-        new Request(r.url, {
-          method: r.method,
-          headers: r.headers,
-          body: JSON.stringify(ctx.body),
-        }),
-      );
-    }
-    return handler.fetch(r);
-  };
-
+  const { pass } = kitCreatePass({ prefix, fetch: handler.fetch, name: "xtandard-webhooks" });
   return { prefix, pass };
 }
 

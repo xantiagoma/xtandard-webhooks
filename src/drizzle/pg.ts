@@ -22,48 +22,30 @@
  * @module
  */
 
-import type { BuildExtraConfigColumns } from "drizzle-orm";
-import {
-  jsonb,
-  pgSchema,
-  pgTable,
-  text,
-  type PgColumnBuilderBase,
-  type PgTableExtraConfigValue,
-} from "drizzle-orm/pg-core";
-import type { DrizzleKvTable } from "./table.ts";
+import { pgKvTable, type PgKvTableOptions } from "@xtandard/kit/drizzle/pg";
+import type { DrizzleKvTable } from "@xtandard/kit/drizzle/pg";
 
-export type { DrizzleKvTable } from "./table.ts";
+export type { DrizzleKvTable } from "@xtandard/kit/drizzle/pg";
 
-/** The `self` passed to an {@link PgWebhooksTableOptions.extraIndexes} callback. */
-type PgWebhooksColumns = BuildExtraConfigColumns<string, Record<string, PgColumnBuilderBase>, "pg">;
-
-/** Options for {@link pgWebhooksTable}. */
-export interface PgWebhooksTableOptions {
-  /** Postgres schema (namespace) to place the table in. Defaults to the public schema. */
-  schema?: string;
-  /** Additional columns merged into the table (e.g. a tenant discriminator). */
-  extraColumns?: () => Record<string, PgColumnBuilderBase>;
-  /** Additional indexes/constraints; receives the built table for column references. */
-  extraIndexes?: (table: PgWebhooksColumns) => PgTableExtraConfigValue[];
-}
+/**
+ * Options for {@link pgWebhooksTable}: `schema` (Postgres namespace; default the
+ * public schema), `extraColumns`, `extraIndexes`, and `keyCollation` (default
+ * `null`: a plain `text` key, as every earlier release; `"C"` for bytewise,
+ * index-usable prefixes on new tables).
+ */
+export type PgWebhooksTableOptions = PgKvTableOptions;
 
 /**
  * Build the Drizzle `pgTable` for the webhooks KV store. Base columns are fixed —
  * `key text PRIMARY KEY`, `value jsonb NOT NULL` — and required by
  * `createDrizzleStorage`; `schema`/`extraColumns`/`extraIndexes` extend it.
- * The table name defaults to `"xtandard_webhooks"`.
+ * The table name defaults to `"xtandard_webhooks"`. The key keeps the plain
+ * `text` type of earlier releases, so existing schemas see no `drizzle-kit`
+ * diff; prefix queries are exact either way.
  */
 export function pgWebhooksTable(
   name = "xtandard_webhooks",
   opts?: PgWebhooksTableOptions,
 ): DrizzleKvTable {
-  const columns = {
-    key: text("key").primaryKey(),
-    value: jsonb("value").notNull(),
-    ...opts?.extraColumns?.(),
-  };
-  return opts?.schema
-    ? pgSchema(opts.schema).table(name, columns, opts.extraIndexes)
-    : pgTable(name, columns, opts?.extraIndexes);
+  return pgKvTable(name, { keyCollation: null, ...opts });
 }

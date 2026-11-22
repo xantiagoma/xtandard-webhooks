@@ -12,23 +12,10 @@
  * @module
  */
 
-import type { AuthorizationProvider, AuthorizeInput } from "./contract.ts";
+import { noAuthorization as kitNoAuthorization } from "@xtandard/kit/authorization/none";
+import type { AuthorizationProvider } from "./contract.ts";
 
-/**
- * Create an {@link AuthorizationProvider} that authorizes everything.
- *
- * @example
- * ```ts
- * import { noAuthorization } from "@xtandard/webhooks/authorization/none";
- *
- * const authz = noAuthorization();
- * await authz.authorize(input); // → true, always
- * ```
- */
+/** Create an {@link AuthorizationProvider} that allows every action. */
 export function noAuthorization(): AuthorizationProvider {
-  return {
-    async authorize(_input: AuthorizeInput): Promise<boolean> {
-      return true;
-    },
-  };
+  return kitNoAuthorization();
 }

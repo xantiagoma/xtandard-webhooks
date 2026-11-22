@@ -13,25 +13,27 @@ interface WebhooksStorage {
 }
 ```
 
-Optional capabilities (separate interfaces + guards): `watch` (change notifications), `transaction`, `compareAndSwap` (multi-instance claim safety), and the webhooks-specific `deliveryQueue` (`claimDue` — native due-delivery claiming, see ADR 0005).
+Optional capabilities (separate interfaces + guards): `watch` (change notifications), `compareAndSwap` (multi-instance claim safety), and the webhooks-specific `deliveryQueue` (`claimDue` — native due-delivery claiming, see ADR 0005). `transaction` / `isTransactional` are still exported but deprecated: no driver implements them.
+
+The contract, the drivers and their conformance suite are [`@xtandard/kit`](https://me.xantiagoma.com/xtandard-kit/)'s, shared by every xtandard product; this package passes its persisted defaults (the `xtandard_webhooks` table, the `xtandard_webhooks` / `webhooks_kv` Mongo names, the `xtandard_webhooks` pg channel) and adds `claimDue`.
 
 ## Adapters
 
 | Subpath                                           | Factory                                        | Peers            | watch                              | CAS | claimDue       |
 | ------------------------------------------------- | ---------------------------------------------- | ---------------- | ---------------------------------- | --- | -------------- |
 | `storage/memory`                                  | `createMemoryStorage`                          | —                | ✓                                  | ✓   | ✓              |
-| `storage/file`                                    | `createFileStorage`                            | —                | ✓ (fs.watch)                       |     |                |
-| `storage/redis`                                   | `createRedisStorage`, `createRedisJSONStorage` | `redis`          | ✓ (keyspace notifications)         |     | ✓ (sorted set) |
-| `storage/postgres`                                | `createPostgresStorage`                        | `pg`             | via `withWatch` + `pgListenNotify` |     |                |
-| `storage/drizzle`                                 | `createDrizzleStorage`                         | `drizzle-orm`    | via `withWatch`                    |     |                |
+| `storage/file`                                    | `createFileStorage`                            | —                | ✓ (fs.watch)                       | ✓   |                |
+| `storage/redis`                                   | `createRedisStorage`, `createRedisJSONStorage` | `redis`          | ✓ (keyspace notifications)         | ✓   | ✓ (sorted set) |
+| `storage/postgres`                                | `createPostgresStorage`                        | `pg`             | via `withWatch` + `pgListenNotify` | ✓   |                |
+| `storage/drizzle`                                 | `createDrizzleStorage`                         | `drizzle-orm`    | via `withWatch`                    | ✓   |                |
 | `drizzle/pg` / `drizzle/mysql` / `drizzle/sqlite` | `pgWebhooksTable` etc.                         | `drizzle-orm`    |                                    |     |                |
-| `storage/mongodb`                                 | `createMongoStorage`                           | `mongodb`        |                                    |     |                |
-| `storage/sqlite`                                  | `createSqliteStorage`                          | — (`bun:sqlite`) |                                    |     |                |
-| `storage/libsql`                                  | `createLibsqlStorage`                          | `@libsql/client` |                                    |     |                |
+| `storage/mongodb`                                 | `createMongoStorage`                           | `mongodb`        |                                    | ✓   |                |
+| `storage/sqlite`                                  | `createSqliteStorage`                          | — (`bun:sqlite`) |                                    | ✓   |                |
+| `storage/libsql`                                  | `createLibsqlStorage`                          | `@libsql/client` |                                    | ✓   |                |
 | `storage/unstorage`                               | `createUnstorageStorage`                       | `unstorage`      |                                    |     |                |
 | `storage/cloudflare-kv`                           | `createCloudflareKvStorage`                    | — (binding)      |                                    |     |                |
 
-Conventions shared by every adapter (ported from `@xtandard/flags`): factories return `satisfies`-closed literals; `ownsClient = !options.client` — borrowed clients are never closed; optional peers load via lazy memoized dynamic `import()` with an actionable `requirePeer` error; `close()` exists only on owning adapters.
+Conventions shared by every adapter: `ownsClient = !options.client` — borrowed clients are never closed; optional peers load lazily on first use with an actionable error that names the package to install; `close()` exists only on owning adapters; `getKeys` re-checks every key with an exact `startsWith`. Values are written as canonical JSON (sorted keys); rows written by earlier releases read, list and swap as before.
 
 ### File storage: case-safe file names
 
@@ -55,6 +57,15 @@ ALTER TABLE xtandard_webhooks
 ```
 
 Use your table name and `keyLength` (default `512`). The old primary key never held two keys that differ only by case or accent, so the `ALTER` cannot fail on duplicates. It does not split data that was already merged: writes for both spellings went to one row (under the first spelling written), and only applications whose keys differ by case alone were affected.
+
+### MySQL (Drizzle): trailing spaces
+
+`utf8mb4_bin` is a PAD SPACE collation: it ignores trailing spaces, so `whk/acme ` and `whk/acme` are one primary key. The driver matches keys byte-exactly on reads, removes and swaps, and a write whose key differs from a stored key only by trailing spaces throws `KeyCollisionError` instead of overwriting it. The admin API never lets such a key through (every path parameter must match `KEY_REGEX`). New tables can opt into a NO PAD collation, `mysqlWebhooksTable(name, { keyCollation: "utf8mb4_0900_bin" })` (MySQL 8.0+; `utf8mb4_nopad_bin` on MariaDB), and existing ones can migrate in place:
+
+```sql
+ALTER TABLE xtandard_webhooks
+  MODIFY `key` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL;
+```
 
 ## The key model
 

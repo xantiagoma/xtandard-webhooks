@@ -50,8 +50,8 @@ When using the published package instead, swap the dependency for
 ## Run from the repo root (auto-install + free port)
 
 From the repo root, after `bun run build`, convenience scripts install the
-example on first use and launch it on a **free port** (via `get-port-please`,
-so you can run several at once without collisions):
+example on first use and launch it on a **free port** (the first free one from
+the example's preferred port, so you can run several at once without collisions):
 
 ```bash
 bun run examples:elysia            # or: hono | express

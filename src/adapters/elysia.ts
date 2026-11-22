@@ -74,7 +74,7 @@ function webhooksElysiaRoutes(options: WebhooksElysiaOptions) {
   const app = "/api/applications/:app";
   const endpoint = `${app}/endpoints/:id`;
 
-  return new Elysia({ prefix, name: "xtandard-webhooks" })
+  return new Elysia({ prefix, name: "xtandard-webhooks", seed: prefix })
     .get("/config", pass)
     .get("/api/openapi.json", pass)
     .get("/api/event-types.json", pass)

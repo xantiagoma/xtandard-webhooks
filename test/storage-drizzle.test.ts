@@ -2,13 +2,12 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { getTableName } from "drizzle-orm";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { text } from "drizzle-orm/pg-core";
+import { getTableConfig as getPgTableConfig, text, type PgTable } from "drizzle-orm/pg-core";
 import { pgWebhooksTable } from "../src/drizzle/pg.ts";
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { mysqlWebhooksTable } from "../src/drizzle/mysql.ts";
 import { sqliteWebhooksTable } from "../src/drizzle/sqlite.ts";
 import { createDrizzleStorage } from "../src/storage/drizzle.ts";
-import { isWatchable } from "../src/storage/contract.ts";
 import { runStorageContractTests } from "./storage-contract.ts";
 
 /**
@@ -18,44 +17,23 @@ import { runStorageContractTests } from "./storage-contract.ts";
  * adapter itself issues no DDL). This also proves a real Drizzle db satisfies
  * the adapter's structural `db` type.
  */
-runStorageContractTests("drizzle (pg/pglite)", async () => {
-  const client = new PGlite();
-  await client.exec(`CREATE TABLE webhooks_kv (key text PRIMARY KEY, value jsonb NOT NULL)`);
-  const db = drizzle(client);
-  return createDrizzleStorage({ db, table: pgWebhooksTable("webhooks_kv") });
-});
-
-describe("createDrizzleStorage (pg/pglite)", () => {
-  test("round-trips nested values and isolates by prefix", async () => {
-    const client = new PGlite();
-    await client.exec(`CREATE TABLE kv (key text PRIMARY KEY, value jsonb NOT NULL)`);
-    const storage = createDrizzleStorage({ db: drizzle(client), table: pgWebhooksTable("kv") });
-
-    const value = { url: "https://x.example", rateLimit: 42, nested: { tags: ["a", "b"] } };
-    await storage.setItem("whk/acme/endpoints/ep_1", value);
-    expect(await storage.getItem("whk/acme/endpoints/ep_1")).toEqual(value);
-
-    await storage.setItem("whk/app1/a", { v: 1 });
-    await storage.setItem("whk/app2/b", { v: 2 });
-    expect(await storage.getKeys("whk/app1/")).toEqual(["whk/app1/a"]);
-  });
-
-  test("setItem upserts (second write wins)", async () => {
-    const client = new PGlite();
-    await client.exec(`CREATE TABLE kv (key text PRIMARY KEY, value jsonb NOT NULL)`);
-    const storage = createDrizzleStorage({ db: drizzle(client), table: pgWebhooksTable("kv") });
-    await storage.setItem("k", { n: 1 });
-    await storage.setItem("k", { n: 2 });
-    expect(await storage.getItem("k")).toEqual({ n: 2 });
-  });
-
-  test("plain storage is not watchable (watch is composed via withWatch)", async () => {
-    const client = new PGlite();
-    await client.exec(`CREATE TABLE kv (key text PRIMARY KEY, value jsonb NOT NULL)`);
-    const storage = createDrizzleStorage({ db: drizzle(client), table: pgWebhooksTable("kv") });
-    expect(isWatchable(storage)).toBe(false);
-  });
-});
+let client = new PGlite();
+runStorageContractTests(
+  "drizzle (pg/pglite)",
+  async () => {
+    client = new PGlite();
+    await client.exec(`CREATE TABLE webhooks_kv (key text PRIMARY KEY, value jsonb NOT NULL)`);
+    return createDrizzleStorage({ db: drizzle(client), table: pgWebhooksTable("webhooks_kv") });
+  },
+  {
+    t: { describe, test, expect },
+    capabilities: { compareAndSwap: true, watch: false },
+    timeout: 60_000,
+    seedLegacy: async (_storage, key, raw) => {
+      await client.query(`INSERT INTO webhooks_kv (key, value) VALUES ($1, $2::jsonb)`, [key, raw]);
+    },
+  },
+);
 
 describe("table factories — shape", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -77,6 +55,13 @@ describe("table factories — shape", () => {
       mysqlWebhooksTable("kv", { keyLength: 191 }) as unknown as MySqlTable,
     ).columns[0]!;
     expect(custom.getSQLType()).toMatch(/^varchar\(191\) .*utf8mb4_bin$/);
+  });
+
+  test("the pg key column stays plain text (no drizzle-kit diff for existing schemas)", () => {
+    const key = getPgTableConfig(pgWebhooksTable() as unknown as PgTable).columns.find(
+      (c) => c.name === "key",
+    )!;
+    expect(key.getSQLType()).toBe("text");
   });
 
   test("the table name defaults to xtandard_webhooks", () => {

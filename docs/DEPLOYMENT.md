@@ -22,21 +22,23 @@ docker run -p 3000:3000 \
 
 ## Environment variables (CLI `serve`/`dispatch` and the image)
 
-| Variable                                                                 | Meaning                                                        | Default                                         |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------- |
-| `STORAGE_DRIVER` / `QUEUE_STORAGE_DRIVER`                                | `memory` `file` `redis` `postgres` `mongodb` `sqlite` `libsql` | `file` (standalone: `memory`) / same as storage |
-| `REDIS_URL`, `STORAGE_PREFIX`/`QUEUE_PREFIX`                             | redis connection + key prefix                                  | —                                               |
-| `DATABASE_URL` or `POSTGRES_URL`, `{STORAGE,QUEUE}_PG_TABLE`             | postgres                                                       | table `xtandard_webhooks`                       |
-| `MONGO_URL`, `MONGO_DB`, `{STORAGE,QUEUE}_MONGO_COLLECTION`              | mongodb                                                        | —                                               |
-| `{STORAGE,QUEUE}_FILE_DIR`                                               | file driver dirs                                               | `./.webhooks/{storage,queue}`                   |
-| `{STORAGE,QUEUE}_SQLITE_PATH`, `LIBSQL_URL`/`LIBSQL_AUTH_TOKEN`          | sqlite / libsql                                                | —                                               |
-| `PORT`, `BASE_PATH`, `TITLE`, `LOGO_URL`                                 | HTTP + branding                                                | `3000`, `/`, `@xtandard/webhooks`               |
-| `READONLY`                                                               | mutations 403                                                  | `false`                                         |
-| `AUTH_MODE`, `AUTH_USERNAME`, `AUTH_PASSWORD_HASH` (or `AUTH_PASSWORD`)  | `none`/`basic`                                                 | `none`                                          |
-| `PORTAL_SECRET`                                                          | enables portal tokens                                          | off                                             |
-| `DISPATCHER`                                                             | `0`/`false` disables the in-process dispatcher                 | on                                              |
-| `RETRY_SCHEDULE`                                                         | comma list, e.g. `0s,5s,5m,30m,2h,5h,10h`                      | Svix-compatible default                         |
-| `MESSAGE_KEEP_LAST`/`MESSAGE_MAX_AGE`, `AUDIT_KEEP_LAST`/`AUDIT_MAX_AGE` | retention                                                      | off                                             |
+| Variable                                                                                                                         | Meaning                                                                                   | Default                                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `STORAGE_DRIVER` / `QUEUE_STORAGE_DRIVER`                                                                                        | `memory` `file` `redis` `postgres` `mongodb` `sqlite` `libsql`; anything else is an error | `file` (standalone: `memory`) / same as storage                         |
+| `REDIS_URL`, `STORAGE_PREFIX`/`QUEUE_PREFIX`                                                                                     | redis connection + key prefix                                                             | —                                                                       |
+| `DATABASE_URL` or `POSTGRES_URL`, `{STORAGE,QUEUE}_PG_TABLE`                                                                     | postgres                                                                                  | table `xtandard_webhooks_{storage,queue}`                               |
+| `MONGO_URL`, `MONGO_DB`, `{STORAGE,QUEUE}_MONGO_COLLECTION`                                                                      | mongodb                                                                                   | —                                                                       |
+| `{STORAGE,QUEUE}_FILE_DIR`                                                                                                       | file driver dirs                                                                          | `./.webhooks/{storage,queue}`                                           |
+| `{STORAGE,QUEUE}_SQLITE_PATH`, `{STORAGE,QUEUE}_SQLITE_TABLE`, `{STORAGE,QUEUE}_LIBSQL_URL` or `LIBSQL_URL`, `LIBSQL_AUTH_TOKEN` | sqlite / libsql                                                                           | `./.webhooks/{storage,queue}.sqlite` / `.db`, table `xtandard_webhooks` |
+| `PORT`, `BASE_PATH`, `TITLE`, `LOGO_URL`                                                                                         | HTTP + branding                                                                           | `3000`, `/`, `@xtandard/webhooks`                                       |
+| `READONLY`                                                                                                                       | mutations 403                                                                             | `false`                                                                 |
+| `AUTH_MODE`, `AUTH_USERNAME`, `AUTH_PASSWORD_HASH` (or `AUTH_PASSWORD`), `AUTH_ROLE`                                             | `none`/`basic` (anything else is an error); the basic user's role                         | `none`; user `admin`, role `admin`                                      |
+| `PORTAL_SECRET`                                                                                                                  | enables portal tokens                                                                     | off                                                                     |
+| `DISPATCHER`                                                                                                                     | `0`/`false` disables the in-process dispatcher                                            | on                                                                      |
+| `RETRY_SCHEDULE`                                                                                                                 | comma list, e.g. `0s,5s,5m,30m,2h,5h,10h`                                                 | Svix-compatible default                                                 |
+| `MESSAGE_KEEP_LAST`/`MESSAGE_MAX_AGE`, `AUDIT_KEEP_LAST`/`AUDIT_MAX_AGE`                                                         | retention                                                                                 | off                                                                     |
+
+An empty variable (`PORT=` in a `.env` file) counts as unset.
 
 ## Security posture — read this
 

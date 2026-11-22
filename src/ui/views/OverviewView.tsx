@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { listDeliveries, listEndpoints } from "../api.ts";
 import { formatDateTime, relativeTime, successRate, withinWindow } from "../lib/format.ts";
-import { cn } from "../lib/utils.ts";
+import { cn } from "@xtandard/kit/ui";
 import {
   DeliveryStatusBadge,
   EmptyCard,

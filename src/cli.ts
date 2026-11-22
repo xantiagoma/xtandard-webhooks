@@ -13,8 +13,20 @@
  * @module
  */
 
-import type { AuthProvider } from "./auth/contract.ts";
-import type { AuthorizationProvider } from "./authorization/contract.ts";
+import {
+  buildAuthFromEnv,
+  describeStorage as kitDescribeStorage,
+  env,
+  isMainModule,
+  parseArgs,
+  pkgVersion as kitPkgVersion,
+  serve,
+  startServer,
+  storageFromEnv,
+  storageRegistryFrom,
+  type StorageRole,
+} from "@xtandard/kit/cli";
+import { WEBHOOKS_ACTIONS, type WebhooksAction } from "./authorization/contract.ts";
 import {
   createWebhooksCore,
   type RetentionOptions,
@@ -26,21 +38,48 @@ import { durationToMs, parseDurationList } from "./duration.ts";
 import type { JsonValue, WebhookDuration } from "./schema.ts";
 import type { WebhooksStorage } from "./storage/contract.ts";
 
-type Driver = "memory" | "file" | "redis" | "postgres" | "mongodb" | "sqlite" | "libsql";
-
 /** The two storage roles: control plane (`STORAGE`) and delivery queue (`QUEUE`). */
 type Role = "STORAGE" | "QUEUE";
 
-const env = (key: string, fallback = ""): string => process.env[key] ?? fallback;
-
-const isTruthy = (value: string): boolean => value === "1" || value.toLowerCase() === "true";
+/** The drivers the CLI accepts (an unknown `STORAGE_DRIVER` is an error). */
+const DRIVERS = ["memory", "file", "redis", "postgres", "mongodb", "sqlite", "libsql"] as const;
 
 /**
- * The driver env var for a role: `STORAGE_DRIVER` for the control plane,
- * `QUEUE_STORAGE_DRIVER` for the delivery queue.
+ * A storage role with its persisted defaults (ADR 0005): the role name in
+ * lower case is part of every default location, e.g. `xtandard_webhooks_storage`.
+ * The driver variables are `STORAGE_DRIVER` and `QUEUE_STORAGE_DRIVER`.
  */
-const driverEnv = (role: Role): string =>
-  role === "STORAGE" ? "STORAGE_DRIVER" : "QUEUE_STORAGE_DRIVER";
+const storageRole = (role: Role): StorageRole => {
+  const r = role.toLowerCase();
+  return {
+    name: role,
+    defaults: {
+      prefix: `xtandard:webhooks:${r}`,
+      pgTable: `xtandard_webhooks_${r}`,
+      mongoDb: "xtandard_webhooks",
+      mongoCollection: `webhooks_${r}`,
+      sqlitePath: `./.webhooks/${r}.sqlite`,
+      libsqlUrl: `file:./.webhooks/${r}.db`,
+      fileDir: `./.webhooks/${r}`,
+    },
+  };
+};
+
+/**
+ * The webhooks storage entries, so every CLI store carries the product defaults
+ * (the `xtandard_webhooks` sqlite/libsql table) and capabilities (`claimDue` on
+ * memory and redis), with the kit's env → options mapping. Each driver module
+ * loads on first use; the sqlite one needs the Bun runtime (`bunx xtandard-webhooks …`).
+ */
+const STORAGE_DRIVERS = storageRegistryFrom({
+  memory: () => import("./storage/memory.ts"),
+  file: () => import("./storage/file.ts"),
+  redis: () => import("./storage/redis.ts"),
+  postgres: () => import("./storage/postgres.ts"),
+  mongodb: () => import("./storage/mongodb.ts"),
+  sqlite: () => import("./storage/sqlite.ts"),
+  libsql: () => import("./storage/libsql.ts"),
+});
 
 /**
  * Parse a duration env like `"30d"`, `"34h"`, `"90m"`, `"10s"` into a
@@ -117,57 +156,11 @@ function dispatcherEnabled(): boolean {
  * {@link buildQueueStorage}).
  */
 async function buildStorage(role: Role): Promise<WebhooksStorage> {
-  const driver = (env(driverEnv(role), "file") as Driver) || "file";
-  const r = role.toLowerCase();
-  switch (driver) {
-    case "redis": {
-      const { createRedisStorage } = await import("./storage/redis.ts");
-      return createRedisStorage({
-        url: env("REDIS_URL", "redis://localhost:6379"),
-        prefix: env(`${role}_PREFIX`, `xtandard:webhooks:${r}`),
-      });
-    }
-    case "postgres": {
-      const { createPostgresStorage } = await import("./storage/postgres.ts");
-      return createPostgresStorage({
-        connectionString:
-          env("DATABASE_URL") || env("POSTGRES_URL", "postgres://localhost:5432/postgres"),
-        table: env(`${role}_PG_TABLE`, `xtandard_webhooks_${r}`),
-      });
-    }
-    case "mongodb": {
-      const { createMongoStorage } = await import("./storage/mongodb.ts");
-      return createMongoStorage({
-        url: env("MONGO_URL", "mongodb://localhost:27017"),
-        dbName: env("MONGO_DB", "xtandard_webhooks"),
-        collectionName: env(`${role}_MONGO_COLLECTION`, `webhooks_${r}`),
-      });
-    }
-    case "sqlite": {
-      // Requires running the CLI under Bun (`bunx xtandard-webhooks …`).
-      const { createSqliteStorage } = await import("./storage/sqlite.ts");
-      return createSqliteStorage({
-        path: env(`${role}_SQLITE_PATH`, `./.webhooks/${r}.sqlite`),
-      });
-    }
-    case "libsql": {
-      const { createLibsqlStorage } = await import("./storage/libsql.ts");
-      const authToken = env("LIBSQL_AUTH_TOKEN");
-      return createLibsqlStorage({
-        url: env(`${role}_LIBSQL_URL`) || env("LIBSQL_URL", `file:./.webhooks/${r}.db`),
-        ...(authToken ? { authToken } : {}),
-      });
-    }
-    case "memory": {
-      const { createMemoryStorage } = await import("./storage/memory.ts");
-      return createMemoryStorage();
-    }
-    case "file":
-    default: {
-      const { createFileStorage } = await import("./storage/file.ts");
-      return createFileStorage({ dir: env(`${role}_FILE_DIR`, `./.webhooks/${r}`) });
-    }
-  }
+  return (await storageFromEnv({
+    role: storageRole(role),
+    drivers: STORAGE_DRIVERS,
+    allowed: DRIVERS,
+  })) as WebhooksStorage;
 }
 
 /**
@@ -188,106 +181,23 @@ async function buildQueueStorage(): Promise<WebhooksStorage | undefined> {
  * credentials).
  */
 async function describeStorage(role: Role): Promise<string> {
-  const { resolve } = await import("node:path");
-  const driver = (env(driverEnv(role), "file") as Driver) || "file";
-  const r = role.toLowerCase();
-  switch (driver) {
-    case "file":
-      return `file → ${resolve(env(`${role}_FILE_DIR`, `./.webhooks/${r}`))}`;
-    case "sqlite":
-      return `sqlite → ${resolve(env(`${role}_SQLITE_PATH`, `./.webhooks/${r}.sqlite`))}`;
-    case "memory":
-      return "memory (ephemeral — not persisted)";
-    default:
-      return driver;
-  }
+  return kitDescribeStorage(storageRole(role), { allowed: DRIVERS });
 }
 
-/** `AUTH_MODE`, with an empty value meaning the default `none`. */
-const authModeFromEnv = (): string => process.env.AUTH_MODE || "none";
-
-/** Build the auth + authorization providers from env (mirrors the standalone app). */
-async function buildAuth(): Promise<{ auth: AuthProvider; authorization: AuthorizationProvider }> {
-  const mode = authModeFromEnv();
-  if (mode === "basic") {
-    const [{ basicAuth }, { rolesAuthorization }] = await Promise.all([
-      import("./auth/basic.ts"),
-      import("./authorization/roles.ts"),
-    ]);
-    const passwordHash = env("AUTH_PASSWORD_HASH");
-    const password = env("AUTH_PASSWORD");
-    if (!passwordHash && !password) {
-      process.stderr.write(
-        "[xtandard/webhooks] AUTH_MODE=basic but neither AUTH_PASSWORD_HASH nor AUTH_PASSWORD is set.\n",
-      );
-    }
-    return {
-      auth: basicAuth({
-        users: [
-          {
-            username: env("AUTH_USERNAME", "admin"),
-            ...(passwordHash ? { passwordHash } : {}),
-            ...(password ? { password } : {}),
-            roles: ["admin"],
-          },
-        ],
-      }),
-      authorization: rolesAuthorization({}),
-    };
-  }
-  if (mode !== "none") throw new Error(`Unknown AUTH_MODE "${mode}" (expected none or basic)`);
-  const [{ noAuth }, { noAuthorization }] = await Promise.all([
-    import("./auth/none.ts"),
-    import("./authorization/none.ts"),
-  ]);
-  return { auth: noAuth(), authorization: noAuthorization() };
+/**
+ * The auth + authorization providers from env (mirrors the standalone app):
+ * `AUTH_MODE=none` (default) or `basic`; anything else is an error.
+ */
+async function buildAuth() {
+  const { DEFAULT_ROLE_POLICY } = await import("./authorization/roles.ts");
+  return buildAuthFromEnv<WebhooksAction>({
+    realm: "xtandard-webhooks",
+    roles: { policy: DEFAULT_ROLE_POLICY, actions: WEBHOOKS_ACTIONS },
+    name: "xtandard/webhooks",
+  });
 }
 
 type FetchHandler = (request: Request) => Response | Promise<Response>;
-
-/**
- * Serve a web-standard fetch handler under whatever runtime the CLI runs on:
- * `Bun.serve` under `bunx`, a `node:http` bridge under `npx`/Node. Resolves only
- * once the server is listening; the process then stays alive on the open socket.
- */
-async function startServer(port: number, fetch: FetchHandler): Promise<void> {
-  const bun = (globalThis as { Bun?: { serve: (options: unknown) => unknown } }).Bun;
-  if (bun) {
-    bun.serve({ port, fetch });
-    return;
-  }
-  const { createServer } = await import("node:http");
-  const server = createServer((req, res) => {
-    void (async () => {
-      try {
-        const chunks: Buffer[] = [];
-        for await (const c of req) chunks.push(c as Buffer);
-        const method = req.method ?? "GET";
-        const headers = new Headers();
-        for (const [k, v] of Object.entries(req.headers)) {
-          if (v === undefined) continue;
-          headers.set(k, Array.isArray(v) ? v.join(", ") : v);
-        }
-        const host = req.headers.host ?? `localhost:${port}`;
-        const url = `http://${host}${req.url ?? "/"}`;
-        const hasBody = method !== "GET" && method !== "HEAD" && chunks.length > 0;
-        const request = new Request(url, {
-          method,
-          headers,
-          body: hasBody ? Buffer.concat(chunks) : undefined,
-        });
-        const response = await fetch(request);
-        res.statusCode = response.status;
-        response.headers.forEach((value, key) => res.setHeader(key, value));
-        res.end(Buffer.from(await response.arrayBuffer()));
-      } catch (err) {
-        res.statusCode = 500;
-        res.end(`Internal error: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    })();
-  });
-  await new Promise<void>((resolve) => server.listen(port, resolve));
-}
 
 /** Verification outcome shown by `listen` for each captured request. */
 export type InboundVerification =
@@ -333,25 +243,6 @@ export function formatInboundWebhook(input: {
   ].join("\n");
 }
 
-/** Minimal flag/value argv parser: `--key value` and `--flag`. */
-function parseArgs(argv: string[]): { _: string[]; flags: Record<string, string | boolean> } {
-  const _: string[] = [];
-  const flags: Record<string, string | boolean> = {};
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]!;
-    if (a.startsWith("--")) {
-      const key = a.slice(2);
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith("--")) flags[key] = true;
-      else {
-        flags[key] = next;
-        i++;
-      }
-    } else _.push(a);
-  }
-  return { _, flags };
-}
-
 /** A core over the env-configured storage (dispatcher NOT started). */
 async function makeCore(): Promise<WebhooksCore> {
   const [storage, queueStorage] = await Promise.all([buildStorage("STORAGE"), buildQueueStorage()]);
@@ -364,19 +255,8 @@ async function makeCore(): Promise<WebhooksCore> {
   });
 }
 
-/** Read this package's version from the nearest package.json (dist or src). */
-async function pkgVersion(): Promise<string> {
-  try {
-    const { readFile } = await import("node:fs/promises");
-    const { fileURLToPath } = await import("node:url");
-    const pkg = JSON.parse(
-      await readFile(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
-    ) as { version?: string };
-    return pkg.version ?? "unknown";
-  } catch {
-    return "unknown";
-  }
-}
+/** This package's version, from `../package.json` (right for both `dist/` and `src/`). */
+const pkgVersion = (): Promise<string> => kitPkgVersion(import.meta.url);
 
 function helpText(version: string): string {
   return `xtandard-webhooks v${version} — self-hosted, Standard Webhooks-compliant outbound webhook control plane
@@ -769,75 +649,53 @@ export async function run(argv: string[]): Promise<number> {
         return await new Promise<number>(() => {});
       }
       case "serve": {
-        const port = Number((flags.port as string) || env("PORT", "3000"));
-        const basePath = env("BASE_PATH", "");
-        const title = env("TITLE", "@xtandard/webhooks");
-        const logoUrl = env("LOGO_URL");
-        const readonly = isTruthy(env("READONLY"));
-        const authMode = authModeFromEnv();
         const portalSecret = env("PORTAL_SECRET");
-
         const { createFetchHandler } = await import("./server/create-fetch-handler.ts");
-        const [storage, queueStorage] = await Promise.all([
-          buildStorage("STORAGE"),
-          buildQueueStorage(),
-        ]);
-        const { auth, authorization } = await buildAuth();
-
-        if (authMode === "none") {
-          process.stderr.write(
-            "[xtandard/webhooks] AUTH_MODE=none — do NOT expose this publicly without authentication.\n",
-          );
-        }
-
-        const retention = retentionFromEnv();
-        const panel = createFetchHandler({
-          storage,
-          ...(queueStorage ? { queueStorage } : {}),
-          basePath,
-          title,
-          ...(logoUrl ? { logoUrl } : {}),
-          readonly,
-          auth,
-          authorization,
-          ...(portalSecret ? { portal: { secret: portalSecret } } : {}),
-          ...(retention ? { retention } : {}),
-          dispatcher: dispatcherEnabled() ? dispatcherOptionsFromEnv() : false,
-        });
-
-        const normalizedBase =
-          basePath && basePath !== "/"
-            ? basePath.startsWith("/")
-              ? basePath
-              : `/${basePath}`
-            : "";
-
-        const handler: FetchHandler = (request) => {
-          const url = new URL(request.url);
-          if (url.pathname === "/healthcheck" || url.pathname === `${normalizedBase}/healthcheck`) {
-            return new Response(JSON.stringify({ status: "ok", title }), {
-              headers: { "content-type": "application/json" },
+        let dispatcherRunning = false;
+        // `serve` reads PORT, BASE_PATH, TITLE, LOGO_URL and READONLY, warns on
+        // AUTH_MODE=none, prints the banner and owns the process from then on.
+        return await serve({
+          name: "xtandard/webhooks",
+          ...(typeof flags.port === "string" ? { port: Number(flags.port) } : {}),
+          buildPanel: async ({ basePath, title, logoUrl, readonly }) => {
+            const [storage, queueStorage, { auth, authorization }] = await Promise.all([
+              buildStorage("STORAGE"),
+              buildQueueStorage(),
+              buildAuth(),
+            ]);
+            const retention = retentionFromEnv();
+            const panel = createFetchHandler({
+              storage,
+              ...(queueStorage ? { queueStorage } : {}),
+              basePath,
+              ...(title ? { title } : {}),
+              ...(logoUrl ? { logoUrl } : {}),
+              readonly,
+              auth,
+              authorization,
+              ...(portalSecret ? { portal: { secret: portalSecret } } : {}),
+              ...(retention ? { retention } : {}),
+              dispatcher: dispatcherEnabled() ? dispatcherOptionsFromEnv() : false,
             });
-          }
-          return panel.fetch(request);
-        };
-
-        const [storageDesc, queueDesc] = await Promise.all([
-          describeStorage("STORAGE"),
-          env("QUEUE_STORAGE_DRIVER") ? describeStorage("QUEUE") : Promise.resolve("(same store)"),
-        ]);
-        process.stdout.write(`[xtandard/webhooks] storage: ${storageDesc}\n`);
-        process.stdout.write(`[xtandard/webhooks] queue:   ${queueDesc}\n`);
-        process.stdout.write(
-          `[xtandard/webhooks] dispatcher: ${panel.dispatcher ? "running" : "disabled (DISPATCHER=0)"}\n`,
-        );
-
-        await startServer(port, handler);
-        process.stdout.write(
-          `[xtandard/webhooks] listening on http://localhost:${port}${normalizedBase || "/"}\n`,
-        );
-        // The server owns the process now; never resolve so the bin doesn't exit.
-        return await new Promise<number>(() => {});
+            dispatcherRunning = panel.dispatcher !== null;
+            // The standalone healthcheck (Docker HEALTHCHECK): `{ status, title }`
+            // at the root and under the base path, unauthenticated.
+            const health = JSON.stringify({ status: "ok", title: title ?? "@xtandard/webhooks" });
+            const fetch: FetchHandler = (request) => {
+              const { pathname } = new URL(request.url);
+              if (pathname === "/healthcheck" || pathname === `${basePath}/healthcheck`) {
+                return new Response(health, { headers: { "content-type": "application/json" } });
+              }
+              return panel.fetch(request);
+            };
+            return { fetch, close: panel.close };
+          },
+          banner: async () => [
+            `storage: ${await describeStorage("STORAGE")}`,
+            `queue:   ${env("QUEUE_STORAGE_DRIVER") ? await describeStorage("QUEUE") : "(same store)"}`,
+            `dispatcher: ${dispatcherRunning ? "running" : "disabled (DISPATCHER=0)"}`,
+          ],
+        });
       }
       default:
         process.stderr.write(`Unknown command: ${command}\n\n${helpText(await pkgVersion())}`);
@@ -848,3 +706,8 @@ export async function run(argv: string[]): Promise<number> {
     return 1;
   }
 }
+
+// Run only when executed directly (`bun src/cli.ts`), not when imported by the
+// bin shim, the standalone app or a test.
+if (isMainModule({ url: import.meta.url }))
+  void run(process.argv.slice(2)).then((code) => process.exit(code));

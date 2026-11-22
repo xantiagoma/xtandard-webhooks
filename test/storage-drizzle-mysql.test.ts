@@ -1,7 +1,7 @@
 import { getTableConfig, type MySqlTable } from "drizzle-orm/mysql-core";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
-import { afterAll, describe } from "vitest";
+import { afterAll, describe, expect, test } from "vitest";
 import { mysqlWebhooksTable } from "../src/drizzle/mysql.ts";
 import { createDrizzleStorage } from "../src/storage/drizzle.ts";
 import { runStorageContractTests } from "./storage-contract.ts";
@@ -48,11 +48,38 @@ afterAll(async () => {
 }, 120_000);
 
 describe.skipIf(!MYSQL_URL)("createDrizzleStorage (mysql, live)", () => {
-  runStorageContractTests("drizzle (mysql)", async () => {
-    const p = await getPool(MYSQL_URL!);
-    const table = mysqlWebhooksTable(`kv_${n++}`);
-    await p.query(createTableSql(table as unknown as MySqlTable));
-    // `mysql2/promise` and `mysql2` ship separate (incompatible) Pool typings; the runtime object is the same.
-    return createDrizzleStorage({ db: drizzle(p as never), table });
-  });
+  // The default key collation, utf8mb4_bin, is PAD SPACE: "a" and "a " are one
+  // primary key, so the trailing-space case expects the colliding write to be
+  // refused (KeyCollisionError) rather than both keys coexisting.
+  runStorageContractTests(
+    "drizzle (mysql, utf8mb4_bin)",
+    async () => {
+      const p = await getPool(MYSQL_URL!);
+      const table = mysqlWebhooksTable(`kv_${n++}`);
+      await p.query(createTableSql(table as unknown as MySqlTable));
+      // `mysql2/promise` and `mysql2` ship separate (incompatible) Pool typings; the runtime object is the same.
+      return createDrizzleStorage({ db: drizzle(p as never), table });
+    },
+    {
+      t: { describe, test, expect },
+      capabilities: { compareAndSwap: true, watch: false, padSpaceKeys: true },
+      timeout: 30_000,
+    },
+  );
+
+  // The NO PAD opt-in for new tables keeps such keys distinct.
+  runStorageContractTests(
+    "drizzle (mysql, utf8mb4_0900_bin)",
+    async () => {
+      const p = await getPool(MYSQL_URL!);
+      const table = mysqlWebhooksTable(`kv_${n++}`, { keyCollation: "utf8mb4_0900_bin" });
+      await p.query(createTableSql(table as unknown as MySqlTable));
+      return createDrizzleStorage({ db: drizzle(p as never), table });
+    },
+    {
+      t: { describe, test, expect },
+      capabilities: { compareAndSwap: true, watch: false },
+      timeout: 30_000,
+    },
+  );
 });

@@ -1,27 +1,30 @@
 import React from "react";
-import { Router, Switch, Route, useLocation, useSearchParams, type BaseLocationHook } from "wouter";
+import { Router, Switch, Route, useSearchParams } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Lock } from "lucide-react";
+import {
+  canLeave,
+  ConfigError,
+  CreatableCombobox,
+  readConfigGlobal,
+  ShellFrame,
+  useShellConfig,
+  useShellNav,
+  useToast,
+  type ShellAppProps,
+  type ShellTab,
+} from "@xtandard/kit/ui";
 import type { WebhooksConfig } from "./types.ts";
 import { WebhooksApiError } from "./types.ts";
-import { getConfig, listApplications, createApplication } from "./api.ts";
-import { useToast } from "./components/Toast.tsx";
-import { ThemeToggle } from "./components/ThemeToggle.tsx";
+import { getApiToken, getConfig, listApplications, createApplication } from "./api.ts";
 import { OverviewView } from "./views/OverviewView.tsx";
 import { EndpointsView } from "./views/EndpointsView.tsx";
 import { EventTypesView } from "./views/EventTypesView.tsx";
 import { MessagesView } from "./views/MessagesView.tsx";
 import { DeliveriesView } from "./views/DeliveriesView.tsx";
 import { AuditView } from "./views/AuditView.tsx";
-import { cn } from "./lib/utils.ts";
-import { canLeave } from "./lib/nav-guard.ts";
-import { CreatableCombobox } from "./components/primitives.tsx";
 
-interface NavTab {
-  path: string;
-  label: string;
-  match: (loc: string) => boolean;
+interface NavTab extends ShellTab {
   /** Hidden in portal mode. */
   adminOnly?: boolean;
 }
@@ -37,16 +40,6 @@ const NAV_TABS: NavTab[] = [
   { path: "/audit", label: "Audit", match: (l) => l.startsWith("/audit"), adminOnly: true },
 ];
 
-declare global {
-  interface Window {
-    __WEBHOOKS_CONFIG__?: WebhooksConfig;
-  }
-}
-
-function getBootstrap(): Partial<WebhooksConfig> {
-  return window.__WEBHOOKS_CONFIG__ ?? {};
-}
-
 /**
  * The dashboard, wrapped in a wouter {@link Router}. `locationHook` + `base` make
  * routing pluggable: the bundled SPA uses browser history (clean paths, served by
@@ -55,20 +48,16 @@ function getBootstrap(): Partial<WebhooksConfig> {
  */
 export function App({
   locationHook,
+  searchHook,
   base = "",
   logoUrl,
   initialApplicationKey,
   showThemeToggle = true,
   showBrandMark = false,
-}: {
-  locationHook?: BaseLocationHook;
-  base?: string;
-  /** Override the navbar logo image (otherwise taken from server `/config`). */
-  logoUrl?: string;
+  forcePortal,
+}: ShellAppProps & {
   /** Pre-select an application when the URL doesn't name one (embed hosts). */
   initialApplicationKey?: string;
-  /** Show the system/light/dark switcher. Off when an embedding host owns the theme. */
-  showThemeToggle?: boolean;
   /**
    * Show the xtandard mark (`symbol.svg`, served next to the bundle) before the default
    * title. The standalone SPA only: an embed lives in the host's branding.
@@ -76,12 +65,13 @@ export function App({
   showBrandMark?: boolean;
 }): React.ReactElement {
   return (
-    <Router hook={locationHook ?? useHashLocation} base={base}>
+    <Router hook={locationHook ?? useHashLocation} searchHook={searchHook} base={base}>
       <AppShell
         logoUrl={logoUrl}
         initialApplicationKey={initialApplicationKey}
         showThemeToggle={showThemeToggle}
         showBrandMark={showBrandMark}
+        forcePortal={forcePortal}
       />
     </Router>
   );
@@ -92,41 +82,40 @@ function AppShell({
   initialApplicationKey,
   showThemeToggle,
   showBrandMark,
+  forcePortal,
 }: {
   logoUrl?: string;
   initialApplicationKey?: string;
   showThemeToggle: boolean;
   showBrandMark: boolean;
+  forcePortal?: boolean;
 }) {
-  const bootstrap = getBootstrap();
   const toast = useToast();
   const qc = useQueryClient();
-
-  const [location, navigate] = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const configQuery = useQuery({
-    queryKey: ["config"],
-    queryFn: getConfig,
-    staleTime: 60_000,
+  // Nothing admin-scoped runs until /config has answered: a portal token (or a
+  // TokenEmbed) means portal from the first render, and the default route waits
+  // for `ready`, so a portal never fires admin requests.
+  const shell = useShellConfig<WebhooksConfig>({
+    getConfig,
+    bootstrap: readConfigGlobal<WebhooksConfig>("__WEBHOOKS_CONFIG__"),
+    token: getApiToken(),
+    forcePortal,
   });
-
-  const config = configQuery.data ?? (bootstrap as WebhooksConfig);
-  const readonly = config?.readonly ?? false;
-  // Portal mode: the request is scoped by a portal token — reduced chrome, one
-  // fixed application (derived from the portal principal `portal:<app>`).
-  const portal = config?.portal ?? false;
-  const portalApp = portal ? (config?.principal?.id?.replace(/^portal:/, "") ?? "") : null;
+  const { config, readonly, portal } = shell;
+  // Portal mode: one fixed application, derived from the portal principal `portal:<app>`.
+  const portalApp = portal ? (config.principal?.id?.replace(/^portal:/, "") ?? "") : null;
 
   // Branding: explicit props win, then server /config, then defaults.
-  const brandTitle = config?.title || "@xtandard/webhooks";
-  const brandLogoUrl = logoUrl ?? config?.logoUrl;
+  const brandTitle = config.title || "@xtandard/webhooks";
+  const brandLogoUrl = logoUrl ?? config.logoUrl;
 
   const applicationsQuery = useQuery({
     queryKey: ["applications"],
     queryFn: listApplications,
     staleTime: 60_000,
-    enabled: !portal,
+    enabled: shell.adminReady,
   });
   const applications = applicationsQuery.data ?? [];
 
@@ -137,13 +126,8 @@ function AppShell({
     portalApp ?? (searchParams.get("app") || initialApplicationKey || applications[0]?.key || "");
 
   // Navigate to a path while preserving the app query. All in-app navigation
-  // funnels through these helpers, so they consult the nav guard — a view with
-  // unsaved edits can veto the move (wouter has no built-in blocker).
-  const search = searchParams.toString();
-  const go = (path: string) => {
-    if (!canLeave()) return;
-    navigate(search ? `${path}?${search}` : path);
-  };
+  // funnels through the nav guard — a view with unsaved edits can veto the move.
+  const go = useShellNav({ stickyParams: ["app"] });
 
   const setAppKey = (key: string) => {
     if (!canLeave()) return;
@@ -173,109 +157,49 @@ function AppShell({
 
   const tabs = NAV_TABS.filter((t) => !portal || !t.adminOnly);
 
+  // The bare symbol (SVG, no tile), in each theme's lime (docs/BRAND.md). It only
+  // precedes the default title of the standalone admin: a custom title, a logo or
+  // the portal stay unbranded.
+  const brandMark =
+    showBrandMark && !portal && brandTitle === "@xtandard/webhooks" ? (
+      <>
+        <img src="symbol-light.svg" alt="" aria-hidden="true" className="h-5 w-auto dark:hidden" />
+        <img src="symbol.svg" alt="" aria-hidden="true" className="hidden h-5 w-auto dark:block" />
+      </>
+    ) : null;
+
+  const switcher = portal ? (
+    // Portal chrome: no switcher — the token pins the application.
+    <span className="font-mono text-[13px] text-muted-foreground">{appKey}</span>
+  ) : (
+    // Application switcher (type to filter or create)
+    <CreatableCombobox
+      value={appKey}
+      options={applications.map((a) => a.key)}
+      onSelect={setAppKey}
+      onCreate={(key) => createAppMutation.mutate(key)}
+      disabled={readonly}
+      aria-label="Application"
+      placeholder="Application"
+      createLabel={(q) => `Create application "${q}"`}
+      className="w-48"
+    />
+  );
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-background">
-      {/* ── Top Nav ──────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
-          {/* Brand: a configured logoUrl shows as the logo; otherwise the title
-              wordmark. The xtandard mark only precedes the default title of the
-              standalone admin: a custom title, a logo or the portal stay unbranded. */}
-          <div className="flex items-center gap-2 shrink-0">
-            {brandLogoUrl ? (
-              <img
-                src={brandLogoUrl}
-                alt={brandTitle}
-                className="h-7 max-w-[320px] object-contain"
-              />
-            ) : (
-              <>
-                {/* The bare symbol (SVG, no tile), in each theme's lime (docs/BRAND.md). */}
-                {showBrandMark && !portal && brandTitle === "@xtandard/webhooks" && (
-                  <>
-                    <img
-                      src="symbol-light.svg"
-                      alt=""
-                      aria-hidden="true"
-                      className="h-5 w-auto dark:hidden"
-                    />
-                    <img
-                      src="symbol.svg"
-                      alt=""
-                      aria-hidden="true"
-                      className="hidden h-5 w-auto dark:block"
-                    />
-                  </>
-                )}
-                <span className="text-sm font-semibold tracking-tight">{brandTitle}</span>
-              </>
-            )}
-          </div>
-
-          {portal ? (
-            // Portal chrome: no switcher — the token pins the application.
-            <>
-              <span className="text-border select-none">/</span>
-              <span className="font-mono text-[13px] text-muted-foreground">{appKey}</span>
-            </>
-          ) : (
-            <>
-              <span className="text-border select-none">/</span>
-              {/* Application switcher (type to filter or create) */}
-              <CreatableCombobox
-                value={appKey}
-                options={applications.map((a) => a.key)}
-                onSelect={setAppKey}
-                onCreate={(key) => createAppMutation.mutate(key)}
-                disabled={readonly}
-                aria-label="Application"
-                placeholder="Application"
-                createLabel={(q) => `Create application "${q}"`}
-                className="w-48"
-              />
-            </>
-          )}
-
-          <div className="ml-auto flex items-center gap-2">
-            {readonly && (
-              <span className="flex items-center gap-1 rounded-md border border-warning/30 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
-                <Lock className="size-3" />
-                Read-only
-              </span>
-            )}
-            {portal && (
-              <span className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-                Portal
-              </span>
-            )}
-            {showThemeToggle && <ThemeToggle />}
-          </div>
-        </div>
-
-        {/* Nav tabs */}
-        <nav
-          className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-2 sm:px-4"
-          aria-label="Main navigation"
-        >
-          {tabs.map(({ path, label, match }) => (
-            <button
-              key={path}
-              onClick={() => go(path)}
-              className={cn(
-                "whitespace-nowrap px-3 py-2.5 text-[13px] font-medium transition-colors",
-                match(location)
-                  ? "relative text-foreground after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:rounded-full after:bg-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </nav>
-      </header>
-
-      {/* ── Main content (routed) ────────────────────────────────────────── */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden">
+    <ShellFrame
+      title={brandTitle}
+      logoUrl={brandLogoUrl}
+      brandMark={brandMark}
+      switcher={switcher}
+      readonly={readonly}
+      portal={portal}
+      showThemeToggle={showThemeToggle}
+      tabs={tabs}
+      onNavigate={(path) => go(path)}
+      fallback={shell.failed ? <ConfigError /> : null}
+    >
+      {shell.ready ? (
         <Switch>
           <Route path="/endpoints/:id?">
             {(params) => (
@@ -348,7 +272,7 @@ function AppShell({
             )}
           </Route>
         </Switch>
-      </main>
-    </div>
+      ) : null}
+    </ShellFrame>
   );
 }
