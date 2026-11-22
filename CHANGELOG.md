@@ -1,5 +1,149 @@
 # Changelog
 
+## v0.3.0
+
+[compare changes](https://github.com/xantiagoma/xtandard-webhooks/compare/v0.2.1...v0.3.0)
+
+No public name is removed. The exported types are now aliases of the kit's types, so declaration merging no longer works on them. Unknown `STORAGE_DRIVER` values now stop the CLI, and MySQL trailing-space collisions now throw. Details are under "Migration" below.
+
+### Changed
+
+- **`@xtandard/webhooks` is now built on [`@xtandard/kit`](https://me.xantiagoma.com/xtandard-kit/)**,
+  the shared building blocks of the xtandard products, as a regular dependency (`^0.1.1`). You never
+  install or configure it. Every subpath, exported name, config shape, CLI command, env variable,
+  HTTP route and stored-data format stays as it was; the storage drivers, auth/authorization
+  providers, hooks runner, portal-token mechanics, panel/HTTP plumbing, framework adapters, CLI
+  plumbing, admin-shell UI and build tooling are the kit's, with the webhooks defaults passed
+  explicitly (table `xtandard_webhooks`, Mongo `xtandard_webhooks`/`webhooks_kv`, pg channel
+  `xtandard_webhooks`, realm `xtandard-webhooks`, the `whpt_` prefix with a 7-day lifetime, base62
+  ids, readonly 403, `__WEBHOOKS_CONFIG__`, the `xtandard-webhooks:theme` key and the
+  `.xtandard-webhooks` scope).
+- **Kit fixes reach you without a webhooks release.** A kit patch is picked up on your next install.
+  The Docker image is the exception: it is rebuilt with the new kit by the Docker workflow's
+  `refresh-kit` run.
+- Every storage driver except unstorage and Cloudflare KV now has **`compareAndSwap`** (file, sqlite,
+  libsql, postgres, drizzle on pg/mysql/sqlite, mongodb, redis and RedisJSON), so the dispatcher's
+  generic claim path is atomic on all of them. The "dispatcher without atomic claiming" warning now
+  only fires for unstorage and Cloudflare KV.
+- `claimDue` (memory, redis) claims each delivery with a compare-and-swap.
+- The panel (`createFetchHandler` and every adapter result) has a **`close()`** that stops the
+  dispatcher it started.
+- `createPortalToken` / `verifyPortalToken` accept a **list of secrets** for rotation: the first
+  signs, any of them verifies. Keep the old secret until the longest-lived token signed with it has
+  expired.
+- `mysqlWebhooksTable` / `pgWebhooksTable` accept a `keyCollation` (`utf8mb4_0900_bin` /
+  `utf8mb4_nopad_bin` on MySQL/MariaDB, `"C"` on Postgres) for new tables. The defaults are
+  unchanged, so `drizzle-kit` generates no migration.
+- `createFileStorage` takes `legacy` (`"ignore"` | `"warn"` (default, as before) |
+  `"read-through"`) and `onLegacy` for stores written by v0.1.4 and earlier.
+- `createLogHook` takes `json: true` (one JSON object per line) and `describe(event)`.
+- The CLI: `--key=value` flags, `AUTH_ROLE` (the basic-auth user's role, default `admin`),
+  `{STORAGE,QUEUE}_SQLITE_TABLE` and `{STORAGE,QUEUE}_LIBSQL_URL`; the banner shows the resolved
+  path of a `file:` libSQL database.
+- Durations accept weeks (`"2w"`).
+- The OpenAPI document's `info.version` is the package version (it was hard-coded `0.1.0`).
+- The SPA accepts the portal token as `#token=…` (preferred: the fragment never reaches servers or
+  logs) as well as `?token=…`.
+- CI runs on the kit's reusable workflows (`redis:8`, so the RedisJSON conformance cases run; e2e and
+  the examples typecheck on); the Docker workflow smoke-tests the image before pushing and can be
+  re-run with `refresh-kit`; `release.yml` prepares through the kit and publishes itself.
+- Driver errors name the `@xtandard/webhooks/storage/<driver>` import path.
+
+### Fixed
+
+Inherited from the kit (inventory §3; each has a permanent kit test):
+
+- **Unknown `STORAGE_DRIVER` / `QUEUE_STORAGE_DRIVER` is an error** (`Unknown STORAGE_DRIVER
+"postgress" (expected one of: …)`); a typo used to silently fall back to the `file` driver.
+- An **empty env variable counts as unset** (`PORT=` in a `.env` file now means the default, not
+  `""`).
+- **Re-validated path parameters**: every application key, event type name and id in an admin API
+  path must match `KEY_REGEX`, else 404. On MySQL (Drizzle, `utf8mb4_bin`, a PAD SPACE collation)
+  `DELETE /api/applications/acme%20` used to act on `acme`.
+- **MySQL trailing-space keys never cross**: reads, removes and swaps match keys byte-exactly, and a
+  write whose key differs from a stored key only by trailing spaces throws `KeyCollisionError`
+  instead of overwriting it.
+- MySQL (Drizzle): `getKeys` no longer skips keys containing supplementary characters (emoji).
+- A malformed `%` escape in an admin API path is a 404, not a 500.
+- The panel title is HTML-escaped in `index.html` (and the base href, and U+2028/U+2029 in the
+  bootstrap JSON).
+- The SPA's `index.html` is served `cache-control: no-cache`, so an upgrade never serves a stale page
+  that points at deleted hashed assets; `/healthcheck` answers inside the panel (`{ ok: true }`)
+  under any base path; a non-GET on a non-API path is 405 with `Allow: GET, HEAD`.
+- **Portal SPA race**: the shell waits for `/config` before rendering the default route or running
+  any admin query, and a portal token means portal from the first render, so a portal never fires
+  admin requests.
+- The SPA removes `?token=` / `#token=` from the address bar, so a portal link isn't bookmarked,
+  shared or sent in `Referer`.
+- `WebhooksPortal` refetches everything when its `token` changes (a new token may carry a different
+  application) and clears the token on unmount; the embed's `routing: "memory"` keeps the query
+  string (`?app=`).
+- **Portal tokens reject an empty secret** (on create and verify).
+- Express adapter and the CLI's Node server: every `Set-Cookie` header is kept, multi-value request
+  headers are no longer joined, bodies already parsed by `express.json()` / `urlencoded()` are
+  re-serialised correctly, responses stream with backpressure (they were buffered), the body is
+  cancelled when the client disconnects, and `HEAD` has no body.
+- Elysia adapters: `PATCH` and `DELETE` bodies are forwarded (they were dropped), a stale
+  `content-length` is not, and two mounts with different prefixes are no longer de-duplicated by
+  the plugin name.
+- Storage:
+  - Redis `watch` no longer misses events under a prefix with glob characters; `getKeys` no longer
+    returns duplicates (SCAN may repeat keys).
+  - File `watch` reports a write as `update` (it reported a `rename` as `remove` even when the file
+    still existed); file writes are atomic (temporary file + rename).
+  - Empty key segments are distinct keys on file and unstorage (`a//b` ≠ `a/b`); unstorage keys
+    ending in `$` are listed (unstorage hid them as meta keys).
+  - Postgres and libSQL retry a failed connect/DDL instead of caching the failure.
+  - SQLite uses `GLOB` for prefixes (case-sensitive and index-usable); Mongo re-checks `startsWith`,
+    so a case-insensitive collection collation never leaks keys from another prefix.
+  - Postgres/Drizzle/unstorage: a stored JSON string that looks like JSON (`"123"`) reads back as
+    that string (it was parsed a second time into `123`).
+  - Values are written as canonical JSON (sorted keys), so compare-and-swap is key-order-insensitive,
+    and rows written by earlier releases still read, list and swap (structural fallback).
+  - `compareAndSwap` compares own properties only (`{ a: undefined }` is not `{ b: undefined }`) and
+    tells `{}` from `[]`.
+  - `withWatch(...)` results survive an object spread.
+- A thrown auth provider is still a 500 (unchanged), and a `Bearer whpt_…` header is now recognised
+  in any casing of `Bearer`.
+- JSON values must be finite: `NaN`/`Infinity` in a metadata or schema field are a validation error
+  (they used to be stored as `null`); a valibot issue on the root object is reported at the base
+  path without a trailing `.`.
+- `@xtandard/webhooks/storage/sqlite` can be imported under Node (opening a database still needs
+  Bun); the SQLite table is created on first use instead of in the constructor.
+- The CLI runs when executed directly (`bun src/cli.ts`) and never when imported.
+
+Kit v0.1.1 also fixes behaviour this release would otherwise have regressed: the panel on Node
+20.0–20.15, negative numbers as CLI flag values (`--limit -1`), and portal-token expiry under fake
+timers all work as in v0.2.x. `createFileStorage({ legacy: "read-through" })`, new in this release,
+reads through a legacy file only when the mapping is unambiguous.
+
+(Already shipped in v0.2.1, now enforced by the kit: an unknown `AUTH_MODE` is an error, not an open
+panel.)
+
+### Migration
+
+- **Type-level:** `WebhooksStorage`, `WatchableWebhooksStorage`, `CompareAndSwapWebhooksStorage`,
+  `TransactionalWebhooksStorage`, `AuthProvider`, `Principal`, `AuthorizationProvider`,
+  `AuthorizeInput`, `WebhooksHooks`, the driver option types and the `*WebhooksStorage` result types
+  are now type aliases of the kit's types (`KvStorage`, …) rather than interfaces. `implements` and
+  assignments work as before; **declaration merging into them no longer does**. `PortalTokenError`
+  is now a class value plus a type of the same name (`new PortalTokenError(msg)`, `instanceof` and
+  `err.name === "PortalTokenError"` all still work). `WebhooksDashboard` / `WebhooksPortal` are
+  `React.FC` values with `displayName`s.
+- `TransactionalWebhooksStorage` and `isTransactional` are deprecated (no driver ever implemented
+  them).
+- **MySQL (Drizzle) users:** a write that collides with a stored key differing only by trailing
+  spaces now throws `KeyCollisionError`. The admin API cannot produce such keys; code calling the
+  storage directly can. To keep such keys distinct, migrate the key column to a NO PAD collation
+  (`docs/STORAGE.md`).
+- **`STORAGE_DRIVER` typos and empty values:** a value outside the documented list now stops the CLI
+  and the image at startup instead of writing to `./.webhooks`. An empty `STORAGE_DRIVER=` now
+  means the default (`file`; the image sets `memory`).
+- **Validation message:** an idempotency key outside `[a-zA-Z0-9._-]` is reported as
+  `must match /^[a-zA-Z0-9._-]+$/` (it added `(no slashes or path separators)`); the dot-only and
+  256-character messages are unchanged.
+- **Error message:** `createFetchHandler({})` throws a `TypeError` (``createFetchHandler requires either `storage` or `core`.``; it was an `Error` with a slightly different message). Driver peer-missing errors read ``@xtandard/webhooks/storage/<driver> requires the optional peer "<pkg>". Install it with: …``.
+
 ## v0.2.1
 
 [compare changes](https://github.com/xantiagoma/xtandard-webhooks/compare/v0.2.0...v0.2.1)
