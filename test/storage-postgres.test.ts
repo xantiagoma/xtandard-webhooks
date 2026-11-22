@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
+import pg from "pg";
 import { afterAll, describe, expect, test } from "vitest";
-import { createPostgresStorage, type PostgresWebhooksStorage } from "../src/storage/postgres.ts";
+import { createPostgresStorage } from "../src/storage/postgres.ts";
 import { runStorageContractTests } from "./storage-contract.ts";
 
 /**
@@ -52,17 +53,16 @@ describe("createPostgresStorage (webhooks defaults)", () => {
  * without a Postgres server simply skips it. Cleans up after itself.
  */
 describe.skipIf(!process.env.POSTGRES_URL)("createPostgresStorage (live)", () => {
-  const opened: PostgresWebhooksStorage[] = [];
+  // The conformance runner closes each storage after its case, so the tables
+  // are dropped over a connection of our own.
+  const tables: string[] = [];
   let n = 0;
   runStorageContractTests(
     "postgres (live)",
     () => {
-      const storage = createPostgresStorage({
-        connectionString: process.env.POSTGRES_URL,
-        table: `xtandard_webhooks_test_${Date.now()}_${n++}`,
-      });
-      opened.push(storage);
-      return storage;
+      const table = `xtandard_webhooks_test_${Date.now()}_${n++}`;
+      tables.push(table);
+      return createPostgresStorage({ connectionString: process.env.POSTGRES_URL, table });
     },
     {
       t: { describe, test, expect },
@@ -71,9 +71,8 @@ describe.skipIf(!process.env.POSTGRES_URL)("createPostgresStorage (live)", () =>
     },
   );
   afterAll(async () => {
-    for (const storage of opened) {
-      for (const key of await storage.getKeys("")) await storage.removeItem(key);
-      await storage.close();
-    }
+    const pool = new pg.Pool({ connectionString: process.env.POSTGRES_URL });
+    for (const table of tables) await pool.query(`DROP TABLE IF EXISTS ${table}`);
+    await pool.end();
   });
 });
