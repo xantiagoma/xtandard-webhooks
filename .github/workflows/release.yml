@@ -69,7 +69,7 @@ jobs:
           path: .
 
       - name: Publish to npm (with provenance)
-        run: npm publish "pack/${TARBALL}" --provenance --access public
+        run: npm publish "./pack/${TARBALL}" --provenance --access public
 
       # Turn the pushed tag into a GitHub Release (shown on /releases), with the
       # tag's CHANGELOG.md section and a compare link (from release-prepare).
